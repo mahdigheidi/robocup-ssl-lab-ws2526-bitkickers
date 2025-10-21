@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "TeamControl"
+requires-python = ">=3.9"
+dependencies = [
+    "numpy",
+    "matplotlib",
+    "protobuf",
+    "PyYAML"
+]
+
+dynamic = [
+    "version"
+]
+
+[tools.setuptools.packages.find]
+where = ["src"]
+
+[tools.setuptools.dynamic]
+version = {attr = "TeamControl.__version__"}
+
+[project.optional-dependencies]
+pathplanning = [
+    "Shapely",
+    "scikit-learn",
+    "networkx",
+    ]
+trajectory = [
+    "scikit-learn",
+]
