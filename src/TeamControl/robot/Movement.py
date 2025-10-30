@@ -11,7 +11,7 @@ class RobotMovement:
         robot_pos: tuple[float, float, float], 
         target: tuple[float, float],
 
-        max_g = 2.0,
+        max_g = 3.0,
         min_g = 0.3,
         max_speed: float = 5.0, # mm/s     
         max_spC: float = 2.5, # max allowed speed change    
@@ -68,11 +68,11 @@ class RobotMovement:
         
         # logistic model
         k = 0.005
-        x0 = 1000.0 
-        dist = float(f"{distance:.2f}")
+        x0 = 100.0 
+        #dist = float(f"{distance:.2f}")
         theta_gain = min_g + (max_g - min_g) / (1 + math.exp(-k * (distance - x0)))
 
-        if dist<=1e-6:
+        if distance<=1e-6:
             w = 0.0
         else:
             w = theta_gain * theta_error
