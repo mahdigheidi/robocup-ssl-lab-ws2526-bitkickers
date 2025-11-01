@@ -12,6 +12,7 @@ from TeamControl.network.ssl_sockets import grSimSender
 from TeamControl.network.robot_command import RobotCommand
 from TeamControl.ball.send_ball_grsim import send_ball_to_grsim
 from TeamControl.ball.ball_spawner import BallSpawner
+from TeamControl.robot.Movement import RobotMovement
 
 # --------------------------
 # Ball spawner parameters
@@ -69,7 +70,57 @@ def goalie_process(wm) -> None:
 
         # ---- GOALKEEPER STRATEGY ----
         # ...
+
+        # Firstly we will calculate the point that the ball is heading using its current position
+        # For That we will have to calculate the line equation of the ball trajectory
+        # We also have the line equation of the goal line which is x = goal_line_x
+        # We can find the intersection point of these two lines to find where the ball will cross
+        # if the intersection point of the goal line and the ball trajectory is within the goal posts
+        # then the goalie will move to that point, otherwise it will stay in the center of the goal
+        target_x, target_y = spawner.goal_line_x, 0  # Default to center of goal
+
+        # We also would like to define an exit strategy for the goalie
+        # we define a value e, which is a small distance before the goal line to position the goalie
+        exit_max, risk_prob = 500, 0.5
+        e = exit_max * risk_prob  # mm before the goal line
+        # now if the ball is from a distance less than e from the goal line, we will set target_x to be
+        # goal_line_x - e
+        # if the ball is further than e from the goal line, and is less than a quarter of the field length away,
+        # we will set target_x to be e
+        # else, if the ball is further than a quarter of the field length away but still in our half.
+        # we use this formula to set target_x = -4 * (e / field_length) * ball_x + 2*e
+        field_length = spawner.field_x_max - spawner.field_x_min
+        ball_distance_to_goal = spawner.goal_line_x - ball_pos[0]
+        if ball_distance_to_goal <= e:
+            target_x = spawner.goal_line_x - e
+        elif ball_distance_to_goal <= field_length / 4:
+            target_x = e
+        elif ball_distance_to_goal <= field_length / 2:
+            target_x = -4 * (e / field_length) * ball_pos[0] + 2 * e
+
+
+        if ball_pos[0] != prev_ball_pos[0]:  # Avoid division by zero
+            # we will proceed using the equation of a line y = ax + b
+            a = (ball_pos[1] - prev_ball_pos[1]) / (ball_pos[0] - prev_ball_pos[0])  # slope
+            target_y = a * target_x + (ball_pos[1] - a * ball_pos[0])
+
+            # Clamp target_y to within goal posts
+            goal_y_min = -spawner.goal_width / 2
+            goal_y_max = spawner.goal_width / 2
+            if target_y < goal_y_min:
+                target_y = goal_y_min
+            elif target_y > goal_y_max:
+                target_y = goal_y_max
+        else:
+            target_y = 0  # Ball is moving vertically, stay in center
         
+        # now we have target_x and target_y for the goalie to move to
+        vx, vy, w = RobotMovement.goToPoint(robot_pos=robot_pos,
+                                        target=(target_x, target_y),
+                                        slow_radius=500.0)
+        # now we send the command to the robot
+        cmd = RobotCommand(robot_id=ROBOT_ID, vx=vx, vy=vy, w=w, kick=0, dribble=0)
+        sender.send_command(cmd)
 
         # ---- CHECK FOR GOAL ----
         # Check if the ball crossed the goal line and is within the goal posts
