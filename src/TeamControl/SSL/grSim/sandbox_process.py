@@ -66,12 +66,12 @@ def sandbox_process(wm) -> None:
                 ball_pos = 0,0
         
         # Set target position
-        #target_position = 0,0      # Center of the field
+        # target_position = 0,0      # Center of the field
         target_position = ball_pos  # Ball
 
         # Compute velocities to move toward the target
-        vx, vy = RobotMovement.goToPoint(robot_pos=robot_pos, target=target_position)
+        vx, vy, w = RobotMovement.goToPoint(robot_pos=robot_pos, target=target_position)
         
         # Create and send the command
-        cmd = RobotCommand(robot_id=0, vx=vx, vy=vy, w=0.0, kick=0, dribble=0)
+        cmd = RobotCommand(robot_id=0, vx=vx, vy=vy, w=w, kick=0, dribble=0)
         sender.send_command(cmd)
