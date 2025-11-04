@@ -10,6 +10,8 @@ class RobotMovement:
         cls, 
         robot_pos: tuple[float, float, float], 
         target: tuple[float, float],
+        face_ball: bool = False,
+        ball_pos: tuple[float, float] = (0.0, 0.0),
 
         max_g = 3.0,
         min_g = 0.3,
@@ -64,6 +66,8 @@ class RobotMovement:
 
         # Rotate kicker to face target
         D_theta = math.atan2(target[1] - y, target[0] - x)
+        if face_ball:
+            D_theta = math.atan2(ball_pos[1] - y, ball_pos[0] - x)
         theta_error = (D_theta - theta + math.pi) % (2 * math.pi) - math.pi
         
         # logistic model
