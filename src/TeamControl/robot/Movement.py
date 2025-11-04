@@ -15,9 +15,8 @@ class RobotMovement:
 
         max_g = 3.0,
         min_g = 0.3,
-        max_speed: float = 5.0, # mm/s     
-        max_spC: float = 2.5, # max allowed speed change    
-        slow_radius=2000.0,
+        max_speed: float = 5.0, # mm/s      
+        slow_radius=1800.0,
 
         ) -> tuple[float, float, float]:
 
@@ -31,7 +30,7 @@ class RobotMovement:
             velocity (float, optional): Constant velocity to move towards the target. Defaults to 1.0.
 
         Returns:
-            tuple[float, float]: Velocity components (vx, vy) in robot coordinates.
+            tuple[float, float, float]: Velocity components (vx, vy, w) in robot coordinates.
         """
 
         if robot_pos is None or target is None:
@@ -42,17 +41,15 @@ class RobotMovement:
         # Convert target from world coordinates to robot coordinates
         dx, dy = world2robot(robot_pos, target)
         
+        kicker_offset = 102.0  # mm
+        dx -= kicker_offset 
         distance = math.hypot(dx, dy)
 
-        if distance <= 0.00:
+        if distance <= 1e-6:
             desired_speed = 0.0
 
         else:
             desired_speed = max_speed * (1 - math.exp(-distance / slow_radius))
-
-        # Acceleration limit
-        desired_speed = max(cls.prev_speed - max_spC,
-                            min(cls.prev_speed + max_spC, desired_speed))
 
         cls.prev_speed = desired_speed
 
@@ -84,3 +81,4 @@ class RobotMovement:
         #print(f"RobotMovemet.goToPoint: dx={dx:.2f}, dy={dy:.2f}, distance={distance:.2f}, vx={vx:.2f}, vy={vy:.2f}, w={w:.2f}")
 
         return vx, vy, w
+ 
