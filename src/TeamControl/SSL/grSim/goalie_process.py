@@ -84,9 +84,11 @@ def goalie_process(wm) -> None:
         # We can find the intersection point of these two lines to find where the ball will cross
         # if the intersection point of the goal line and the ball trajectory is within the goal posts
         # then the goalie will move to that point, otherwise it will stay in the center of the goal
-        exit_max = 200
+        EXIT_MAX = 200
+        
+        GOAL_MARGIN = 100
 
-        target_x, target_y = spawner.goal_line_x - exit_max, 0  # Default to center of goal
+        target_x, target_y = spawner.goal_line_x - EXIT_MAX, 0  # Default to center of goal
 
         # We also would like to define an exit strategy for the goalie
         # we define a value e, which is a small distance before the goal line to position the goalie
@@ -105,7 +107,7 @@ def goalie_process(wm) -> None:
             # Clamp target_y to within goal posts
             goal_y_min = -spawner.goal_width / 2
             goal_y_max = spawner.goal_width / 2
-            if target_y >= goal_y_max + 50 or target_y <= goal_y_min - 50:
+            if target_y >= goal_y_max + GOAL_MARGIN or target_y <= goal_y_min - GOAL_MARGIN:
                 target_y = 0
         else:
             target_y = 0  # Ball is moving vertically, stay in center
