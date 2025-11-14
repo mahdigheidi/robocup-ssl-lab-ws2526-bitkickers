@@ -41,7 +41,7 @@ class RobotMovement:
         # Convert target from world coordinates to robot coordinates
         dx, dy = world2robot(robot_pos, target)
         
-        kicker_offset = 102.0  # mm
+        kicker_offset = 0
         dx -= kicker_offset 
         distance = math.hypot(dx, dy)
 
