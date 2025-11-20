@@ -1,84 +1,193 @@
 import math
+import time
 from TeamControl.world.transform_cords import world2robot
+
+
+class PDController:
+    """PD controller with trapezoidal velocity profile feed-forward."""
+
+    def __init__(self) -> None:
+        self.prev_error: float = 0.0
+        self.prev_derivative: float = 0.0
+        self.prev_time: float = time.time()
+
+    def compute(
+        self,
+        error: float,
+        max_output: float,
+        max_acceleration: float,
+        p_gain: float,
+        d_gain: float,
+        stop_threshold: float,
+        d_low_pass: float = 0.5,
+    ) -> float:
+        """
+        Compute control output using PD control with trapezoidal velocity profile.
+
+        Args:
+            error: Current error (distance or angle)
+            max_output: Maximum output velocity
+            max_acceleration: Maximum acceleration for trapezoidal profile
+            p_gain: Proportional gain
+            d_gain: Derivative gain
+            stop_threshold: Error threshold below which output is zero
+            d_low_pass: Low-pass filter coefficient for derivative (0-1)
+
+        Returns:
+            Control output (velocity)
+        """
+        delta_time = time.time() - self.prev_time
+        self.prev_time = time.time()
+
+        # Prevent division by zero
+        if delta_time < 1e-6:
+            delta_time = 1e-6
+
+        # Trapezoidal velocity profile feed-forward
+        decel_distance = (max_output * max_output) / (2 * max_acceleration)
+
+        if error < 2 * decel_distance:
+            v_peak = math.sqrt(2 * max_acceleration * error)
+            v_ff = min(v_peak, max_output)
+        else:
+            v_ff = max_output
+
+        # Derivative with low-pass filter
+        derivative = (error - self.prev_error) / delta_time
+        derivative = d_low_pass * derivative + (1 - d_low_pass) * self.prev_derivative
+
+        # PD control + feed forward
+        output = p_gain * error + d_gain * derivative + v_ff
+
+        # Clamp to max output
+        output = max(min(output, max_output), -max_output)
+
+        # Stop if close enough
+        if error < stop_threshold:
+            output = 0.0
+
+        self.prev_error = error
+        self.prev_derivative = derivative
+
+        return output
+
 
 class RobotMovement:
     """Provides basic movement control utilities for robots."""
-    prev_speed = 0.0  
 
-    @classmethod
-    def goToPoint(
-        cls, 
-        robot_pos: tuple[float, float, float], 
+    def __init__(self) -> None:
+        self.position_controller = PDController()
+        self.rotation_controller = PDController()
+
+    def go_to(
+        self,
+        robot_pos: tuple[float, float, float],
         target: tuple[float, float],
-        face_ball: bool = False,
-        ball_pos: tuple[float, float] = (0.0, 0.0),
-
-        max_g = 3.0,
-        min_g = 0.3,
-        max_speed: float = 5.0, # mm/s      
-        slow_radius=1800.0,
-
-        ) -> tuple[float, float, float]:
-
+        kicker_to_target: bool = False,
+        max_speed: float = 5000,  # mm/s
+        max_acceleration: float = 1700,  # mm/s^2
+        kicker_offset: float = 102.0,  # mm
+        proportional_gain: float = 0.05,
+        differential_gain: float = 0.01,
+        differential_low_pass: float = 0.5,
+        stop_threshold: float = 1.0,  # mm
+    ) -> tuple[float, float]:
         """
-        Calculate the velocity (vx, vy) for the robot to move towards a target point
-        and stop when it reaches it.
+        Calculate the velocity (vx, vy) for the robot to move towards a target position.
 
         Args:
             robot_pos (tuple[float, float, float]): Robot's current position (x, y, theta) in world coordinates.
             target (tuple[float, float]): Target position in world coordinates.
-            velocity (float, optional): Constant velocity to move towards the target. Defaults to 1.0.
+            kicker_to_target: True for kicker to target position, False for robot center to target position.
+            max_speed: Maximum linear speed in mm/s
+            max_acceleration: Maximum linear acceleration in mm/s^2
+            kicker_offset: Offset distance for kicker (mm)
+            proportional_gain: P gain for position control
+            differential_gain: D gain for position control
+            differential_low_pass: Low-pass filter for position derivative
+            stop_threshold: Distance threshold below which robot stops (mm)
 
         Returns:
-            tuple[float, float, float]: Velocity components (vx, vy, w) in robot coordinates.
+            tuple[float, float]: Velocity components (vx, vy) in m/s.
         """
-
-        if robot_pos is None or target is None:
-            return 0.0, 0.0, 0.0
-
         x, y, theta = robot_pos
 
+        if kicker_to_target:
+            x += kicker_offset
+
         # Convert target from world coordinates to robot coordinates
-        dx, dy = world2robot(robot_pos, target)
-        
-        kicker_offset = 0
-        dx -= kicker_offset 
-        distance = math.hypot(dx, dy)
+        dx, dy = world2robot((x, y, theta), target)  # type: ignore
 
-        if distance <= 1e-6:
-            desired_speed = 0.0
+        # Calculate position error
+        position_error = math.hypot(dx, dy)
 
+        # Use position controller to get desired speed
+        desired_v = self.position_controller.compute(
+            error=position_error,
+            max_output=max_speed,
+            max_acceleration=max_acceleration,
+            p_gain=proportional_gain,
+            d_gain=differential_gain,
+            d_low_pass=differential_low_pass,
+            stop_threshold=stop_threshold,
+        )
+
+        # Convert to x,y components (avoid division by zero)
+        if position_error > 1e-6:
+            vx_cmd = (dx / position_error) * desired_v
+            vy_cmd = (dy / position_error) * desired_v
         else:
-            desired_speed = max_speed * (1 - math.exp(-distance / slow_radius))
+            vx_cmd = 0.0
+            vy_cmd = 0.0
 
-        cls.prev_speed = desired_speed
+        # Convert linear velocities from mm/s to m/s
+        return vx_cmd / 1000, vy_cmd / 1000
 
-        # Convert speed to vx, vy
-        if distance > 1e-6:
-            vx = (dx / distance) * desired_speed
-            vy = (dy / distance) * desired_speed
-        else:
-            vx = 0.0
-            vy = 0.0
+    def face_towards(
+        self,
+        robot_pos: tuple[float, float, float],
+        target: tuple[float, float],
+        max_angular_speed: float = 4.0,  # radians/s
+        max_angular_acceleration: float = 5.0,  # rad/s^2
+        angular_proportional_gain: float = 0.5,
+        angular_differential_gain: float = 0.15,
+        angular_differential_low_pass: float = 0.3,
+        stop_threshold: float = 0.05,  # radians
+    ) -> float:
+        """
+        Calculate the angular velocity (w) for the robot to face towards a target point.
 
-        # Rotate kicker to face target
-        D_theta = math.atan2(target[1] - y, target[0] - x)
-        if face_ball:
-            D_theta = math.atan2(ball_pos[1] - y, ball_pos[0] - x)
-        theta_error = (D_theta - theta + math.pi) % (2 * math.pi) - math.pi
-        
-        # logistic model
-        k = 0.005
-        x0 = 100.0 
-        #dist = float(f"{distance:.2f}")
-        theta_gain = min_g + (max_g - min_g) / (1 + math.exp(-k * (distance - x0)))
+        Args:
+            robot_pos (tuple[float, float, float]): Robot's current position (x, y, theta) in world coordinates.
+            target (tuple[float, float]): Target point to face towards in world coordinates.
+            max_angular_speed: Maximum angular speed in rad/s
+            max_angular_acceleration: Maximum angular acceleration in rad/s^2
+            angular_proportional_gain: P gain for rotation control
+            angular_differential_gain: D gain for rotation control
+            angular_differential_low_pass: Low-pass filter for rotation derivative
+            stop_threshold: Angle threshold below which robot stops rotating (radians)
 
-        if distance<=1e-6:
-            w = 0.0
-        else:
-            w = theta_gain * theta_error
+        Returns:
+            float: Angular velocity (w) in rad/s.
+        """
+        x, y, theta = robot_pos
 
-        #print(f"RobotMovemet.goToPoint: dx={dx:.2f}, dy={dy:.2f}, distance={distance:.2f}, vx={vx:.2f}, vy={vy:.2f}, w={w:.2f}")
+        # Calculate target angle
+        target_angle = math.atan2(target[1] - y, target[0] - x)
+        theta_error = (target_angle - theta + math.pi) % (2 * math.pi) - math.pi
 
-        return vx, vy, w
- 
+        # Use rotation controller to get desired angular speed
+        w_cmd = self.rotation_controller.compute(
+            error=abs(theta_error),
+            max_output=max_angular_speed,
+            max_acceleration=max_angular_acceleration,
+            p_gain=angular_proportional_gain,
+            d_gain=angular_differential_gain,
+            d_low_pass=angular_differential_low_pass,
+            stop_threshold=stop_threshold,
+        )
+
+        # Apply correct sign to angular velocity
+        w_cmd = w_cmd if theta_error > 0 else -w_cmd
+
+        return w_cmd
