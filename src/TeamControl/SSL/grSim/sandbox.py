@@ -23,6 +23,7 @@ from TeamControl.world.model_manager import WorldModelManager
 from TeamControl.world.model_runner import wm_runner
 from TeamControl.SSL.grSim.sandbox_process import sandbox_process
 from TeamControl.SSL.grSim.goalie_process import goalie_process
+from TeamControl.SSL.grSim.striker_process import striker_process
 
 # in multiprocessing this can only be a simple process
 
@@ -57,25 +58,30 @@ def main():
     # Initialize world model managersand
     wm_manager = WorldModelManager()
     wm_manager.start()
-    wm = wm_manager.WorldModel()
+    wm = wm_manager.WorldModel() # type: ignore
     
     # World model runner process
     wmr = Process(target=wm_runner, args=(wm,vision_q,gc_q,))
 
     # Sandbox process for sending commands to grSim
     sandbox = Process(target=sandbox_process, args=(wm,))
-    # sandbox = Process(target=goalie_process, args=(wm,)) # This is where you will implement your goalie logic
-
+    goalie = Process(target=goalie_process, args=(wm,)) # This is where you will implement your goalie logic
+    striker = Process(target=striker_process, args=(wm,)) # striker process
     # Start all processes
     vision_wkr.start()
     wmr.start()
-    sandbox.start()
+    # sandbox.start()
+    # goalie.start()
+    striker.start()
+    
     # some_other_process2.start()
     
     # Wait for all processes to finish
     vision_wkr.join()
     wmr.join()
-    sandbox.join()
+    # sandbox.join()
+    goalie.join()
+    striker.join()
     # some_other_process2.join()
 
 if __name__ == "__main__":
