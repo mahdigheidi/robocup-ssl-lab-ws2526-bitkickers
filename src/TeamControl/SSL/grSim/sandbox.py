@@ -24,6 +24,7 @@ from TeamControl.world.model_runner import wm_runner
 from TeamControl.SSL.grSim.sandbox_process import sandbox_process
 from TeamControl.SSL.grSim.goalie_process import goalie_process
 from TeamControl.SSL.grSim.striker_process import striker_process
+from TeamControl.SSL.grSim.obstacle_avoidance_process import obstacle_avoidance_process
 
 # in multiprocessing this can only be a simple process
 
@@ -67,12 +68,14 @@ def main():
     sandbox = Process(target=sandbox_process, args=(wm,))
     goalie = Process(target=goalie_process, args=(wm,)) # This is where you will implement your goalie logic
     striker = Process(target=striker_process, args=(wm,)) # striker process
+    obstacle_avoidance = Process(target=obstacle_avoidance_process, args=(wm,))
     # Start all processes
     vision_wkr.start()
     wmr.start()
     # sandbox.start()
     # goalie.start()
-    striker.start()
+    # striker.start()
+    obstacle_avoidance.start()
     
     # some_other_process2.start()
     
@@ -80,8 +83,9 @@ def main():
     vision_wkr.join()
     wmr.join()
     # sandbox.join()
-    goalie.join()
-    striker.join()
+    # goalie.join()
+    # striker.join()
+    obstacle_avoidance.join()
     # some_other_process2.join()
 
 if __name__ == "__main__":

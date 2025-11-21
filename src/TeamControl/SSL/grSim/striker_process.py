@@ -52,7 +52,7 @@ def striker_process(wm) -> None:
 
     robot_movement = RobotMovement()
 
-    while time.time() - start_time < 120:
+    while time.time() - start_time < 90:
         # Update world model when new frame is available
         # while time < 1 and mode == testing
         if version < wm.get_version():
@@ -79,7 +79,7 @@ def striker_process(wm) -> None:
         if distance_to_ball > 110:
             # Move to ball
             vx, vy = robot_movement.go_to(robot_pos, ball_pos, kicker_to_target=True, stop_threshold=5)
-            w = robot_movement.face_towards(robot_pos=robot_pos, target=ball_pos)
+            w = robot_movement.face_towards(robot_pos=robot_pos, target=ball_pos, max_angular_acceleration=3)
 
             cmd = RobotCommand(robot_id=ROBOT_ID, vx=vx, vy=vy, w=w, kick=0, dribble=0)
         else:

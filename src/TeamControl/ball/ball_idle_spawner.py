@@ -11,8 +11,7 @@ from TeamControl.network.ssl_sockets import grSimSender
 
 class BallIdleSpawner:
     # will be filled with test scenarios during the live demo
-    test_scenarios = []
-
+    test_scenarios = [(2, -0.5), (3.5, -1.5), (3.9, 1.8), (1, 0), (0.5, 0), (0.1, 0.2)]
     def __init__(self, division='B', seed=None):
         self.division = division
         if seed is None:
