@@ -223,6 +223,7 @@ class RobotMovement:
         dx, dy = target_robot_frame
         distance = math.sqrt(dx ** 2 + dy ** 2)
         # Normalize direction and scale by velocity
+        vx, vy = 0.0, 0.0
         if distance > 300:
             vx = (dx / distance) * velocity
             vy = (dy / distance) * velocity
@@ -232,7 +233,5 @@ class RobotMovement:
         elif 10 < distance <= 150:
             vx = (dx / distance) * (velocity / 7)
             vy = (dy / distance) * (velocity / 7)
-        elif distance <= 10:
-            vx = 0
-            vy = 0
+
         return vx, vy

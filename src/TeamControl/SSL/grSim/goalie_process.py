@@ -195,8 +195,8 @@ def goalie_process(wm) -> None:
         #     ball_pos = (x, y)
 
         # ---- BALL RESPAWNING LOGIC (DO NOT CHANGE) ----
-        elif BallSpawner.is_ball_idle(ball_pos, prev_ball_pos) or not spawner.is_ball_in_field(ball_pos):
-            x, y, vx, vy = spawner.spawn_next_ball()
-            send_ball_to_grsim(x, y, vx, vy)
-            prev_ball_pos = ball_pos
-            ball_pos = (x, y)
+        # elif BallSpawner.is_ball_idle(ball_pos, prev_ball_pos) or not spawner.is_ball_in_field(ball_pos):
+        #     x, y, vx, vy = spawner.spawn_next_ball()
+        #     send_ball_to_grsim(x, y, vx, vy)
+        #     prev_ball_pos = ball_pos
+        #     ball_pos = (x, y)
