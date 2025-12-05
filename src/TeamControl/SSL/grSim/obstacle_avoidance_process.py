@@ -56,8 +56,14 @@ def obstacle_avoidance_process(wm):
     dyn_robot_cur_pos = {}
 
     # get all active robots ids from grSim
+    robot_movement = RobotMovement()
     robots_yellow = wm.get_our_robots(True)
     robots_blue = wm.get_our_robots(False)
+    print("Active Yellow Robots IDs:", robots_yellow.active)
+    print("Active Blue Robots IDs:", robots_blue.active)
+    mid_point_found = False
+    mid_point = (2000, 0)
+    # sender_yellow.send_command(RobotCommand(robot_id=ROBOT_ID, vx=-3, vy=-3, w=0.0, kick=0, dribble=0))
 
     # Remove Robots that are not present in the scenario
     remove_robots_not_in_scenario(robots_yellow, robots_blue, static_robots, dynamic_robots)
@@ -79,6 +85,7 @@ def obstacle_avoidance_process(wm):
             try:
                 robot_obj = wm.get_yellow_robots(isYellow=IS_YELLOW, robot_id=ROBOT_ID)
                 robot_pos = robot_obj.position  # (x, y, orientation)
+                print("Main Agent Position:", robot_pos)
                 # initialize dynamic robots positions
                 dynamic_robots_pos = []
                 for dyn_robot_id in dynamic_robots:
@@ -91,6 +98,7 @@ def obstacle_avoidance_process(wm):
                 pass
 
         pos_2d = robot_pos[:2]
+        print("Current Position:", pos_2d)
 
         # check for stop conditions: 
         # - reached target
@@ -119,7 +127,11 @@ def obstacle_avoidance_process(wm):
                                dribble=0)
 
             sender_blue.send_command(cmd)
+            # time.sleep(0.1)  # small delay to avoid command congestion
 
+        print("Static Robots Positions:", static_robots_pos)
+        print("Dynamic Robots Positions:", dynamic_robots_pos)
+        print("Dynamic Robots Velocities:", dynamic_robots_velocities)
 
         # Define your obstacle avoidance here
         # You can access the current positions of static and dynamic robots
@@ -127,12 +139,42 @@ def obstacle_avoidance_process(wm):
         # static_robots_pos: list of (x,y) positions
         # dynamic_robots_pos: list of (x,y) positions 
         # ...
-        robot_movement = RobotMovement()
-        next_target = calculate_best_next_target(pos_2d, main_agent['goal'],
-                                                 static_robots_pos, dynamic_robots_pos, dynamic_robots_velocities, robot_movement)
+        print(pos_2d)
+        print(robot_pos)
+        # next_target = calculate_best_next_target(pos_2d, main_agent['goal'], static_robots_pos, dynamic_robots_pos, dynamic_robots_velocities, RobotMovement())
+        print("++++++++++++++++++++++++++++++++++++")
+        next_target = main_agent['goal']
+        print(type(next_target))
+        print(type(next_target[0]), type(next_target[1]))
+        if direct_path_is_clear(pos_2d, main_agent['goal'],
+                                  static_robots_pos, dynamic_robots_pos, dynamic_robots_velocities, robot_movement):
+            next_target = main_agent['goal']
+            print("Direct path is clear to the goal.")
+        elif not mid_point_found:
+            # we find a point in the field which is reachable directly from current position
+            # and from which the goal is also reachable directly
+            while True:
+                sample_x = random.normalvariate(2000, 500)
+                sample_y = random.uniform(0, 600)
+                sample_point = (sample_x, sample_y)
+                if not is_point_inside_field(sample_point):
+                    continue
+                if direct_path_is_clear(pos_2d, sample_point,
+                                          static_robots_pos, dynamic_robots_pos, dynamic_robots_velocities, robot_movement) and \
+                   direct_path_is_clear(sample_point, main_agent['goal'],
+                                          static_robots_pos, dynamic_robots_pos, dynamic_robots_velocities, robot_movement):
+                    next_target = sample_point
+                    print("Found intermediate target:", next_target)
+                    mid_point_found = True
+                    mid_point = sample_point
+                    break
+        else:
+            next_target = mid_point
+            print("Heading to intermediate target:", next_target)
+        # print(f"Best next target: {next_target}")
         vx, vy = robot_movement.go_to(robot_pos=robot_pos, target=next_target)
-        cmd = RobotCommand(robot_id=ROBOT_ID, vx=vx, vy=vy, w=0.0, kick=0,
-                          dribble=0)
+        # print(f"Calculated velocities: vx={vx}, vy={vy}")
+        cmd = RobotCommand(robot_id=ROBOT_ID, vx=vx, vy=vy, w=0.0, kick=0, dribble=0)
 
         sender_yellow.send_command(cmd)
 
@@ -162,33 +204,77 @@ def calculate_best_next_target(current_pos, goal_pos, static_obstacles, dynamic_
     Returns:
         tuple: (x, y) next target position.
     """
+    print(f"Calculating next target from {current_pos} to {goal_pos}")
+
     if direct_path_is_clear(current_pos, goal_pos,
                               static_obstacles, dynamic_obstacles, dynamic_obstacles_velocities, robot_movement):
         return goal_pos
-    
+    print("Direct path not clear, sampling new points.")
     # If direct path is not clear, sample new points and select the best one
-    n_samples = 100
+    # n_samples = 1000
     r = distance(current_pos, goal_pos)
-    best_point, best_distance = None, float('inf')
+    # best_point, best_distance = None, float('inf')
     #TODO: in the final competition, we should use multi-threading here to speed up the process
-    for _ in range(n_samples):
-        angle = random.uniform(0, 2 * math.pi)
-        radius = random.uniform(0, r)
-        sample_x = goal_pos[0] + radius * math.cos(angle)
-        sample_y = goal_pos[1] + radius * math.sin(angle)
-        # check here if the sampled point is valid and inside the field
-        sample_point = (sample_x, sample_y)
-        if not is_point_inside_field(sample_point):
-            continue
-
-        if direct_path_is_clear(current_pos, sample_point,
-                                  static_obstacles, dynamic_obstacles, dynamic_obstacles_velocities, robot_movement):
-            dist_to_point = distance(current_pos, sample_point)
-            if dist_to_point < best_distance:
-                best_distance = dist_to_point
-                best_point = sample_point
-
+    # random walk for now, we can improve it later
+    candidate_points = []
+    min_distance = 0
+    best_point = None
+    for i in range(-2000, 2001, 50):
+        for j in range(-2000, 2001, 50):
+            # print(i , j)
+            # print(current_pos[0], i)
+            # print(current_pos[1], j)
+            sample_x = current_pos[0] + i
+            sample_y = current_pos[1] + j
+            sample_point = (sample_x, sample_y)
+            if not is_point_inside_field(sample_point):
+                continue
+            if direct_path_is_clear(current_pos, sample_point,
+                                      static_obstacles, dynamic_obstacles, dynamic_obstacles_velocities, robot_movement):
+                if distance(current_pos, sample_point) <= 2*r or best_point is None:
+                    candidate_points.append(sample_point)
+                    # print(f"Added candidate point: {sample_point}")
+    
+    random.shuffle(candidate_points)
+    return candidate_points[random.randint(0, len(candidate_points)-1)]
+    
+    # return a random candidate point
+    print(f"Candidate points found: {candidate_points}")
     return best_point
+    # for _ in range(n_samples):
+
+        # # facing the goal direction find a random angle and radius to sample a point
+        # # angle_to_goal = math.atan2(goal_pos[1] - current_pos[1], goal_pos[0] - current_pos[0])
+        # angle = random.uniform(-math.pi / 2, math.pi / 2)
+        # # print(f"Sampling angle: {angle}")
+        # # print(f"Sampling radius up to: {r / 2}")
+        # radius = random.uniform(0, 1000)
+        # sample_x = current_pos[0] + radius * math.cos(angle)
+        # sample_y = current_pos[1] + radius * math.sin(angle)
+        # # print(f"Sampled coordinates: ({sample_x}, {sample_y})")
+        
+        # sample_x = current_pos[0] + random.uniform(-r / 2, r / 2)
+        # sample_y = current_pos[1] + random.uniform(-r / 2, r / 2)
+
+        # # check here if the sampled point is valid and inside the field
+        # sample_point = (sample_x, sample_y)
+        # # print(f"Sampled point: {sample_point}")
+        # if not is_point_inside_field(sample_point):
+        #     continue
+
+        # # print("Point is inside field.")
+
+        # if direct_path_is_clear(current_pos, sample_point,
+        #                           static_obstacles, dynamic_obstacles, dynamic_obstacles_velocities, robot_movement):
+        #     # print("AAAAAAAAAAAAA")
+        #     dist_to_point = distance(sample_point, goal_pos)
+        #     if dist_to_point < best_distance:
+        #         best_distance = dist_to_point
+        #         best_point = sample_point
+        # else:
+            # print("Path to sampled point not clear.")
+    # print(f"Best point selected: {best_point} with distance to goal: {best_distance}")
+    # return best_point
 
 def direct_path_is_clear(start_pos, end_pos, static_obstacles, dynamic_obstacles, dynamic_obstacles_velocities, robot_movement: RobotMovement):
     """
@@ -212,10 +298,10 @@ def direct_path_is_clear(start_pos, end_pos, static_obstacles, dynamic_obstacles
     else:
         a = (end_pos[1] - start_pos[1]) / (end_pos[0] - start_pos[0])
     b = start_pos[1] - a * start_pos[0]
-    X1, X2 = DEFENSE_AREA_POLYGON[0][0], DEFENSE_AREA_POLYGON[1][0]
-    Y1, Y2 = DEFENSE_AREA_POLYGON[0][1], DEFENSE_AREA_POLYGON[3][1]
+    X1, X2 = DEFENSE_AREA_POLYGON[0][0] - 2 * ROBOT_RADIUS, DEFENSE_AREA_POLYGON[1][0] + 2 * ROBOT_RADIUS
+    Y1, Y2 = DEFENSE_AREA_POLYGON[0][1] + 2 * ROBOT_RADIUS, DEFENSE_AREA_POLYGON[3][1] - 2 * ROBOT_RADIUS
     if a == float('inf'):
-        if start_pos[1] <= Y1 and end_pos[1] >= Y2 or start_pos[1] >= Y2 and end_pos[1] <= Y1:
+        if start_pos[1] <= Y1 + ROBOT_RADIUS and end_pos[1] >= Y2 or start_pos[1] >= Y2 and end_pos[1] <= Y1:
             return False
     elif a == 0:
         if start_pos[0] <= X1 and end_pos[0] >= X2 or start_pos[0] >= X2 and end_pos[0] <= X1:
@@ -239,13 +325,13 @@ def direct_path_is_clear(start_pos, end_pos, static_obstacles, dynamic_obstacles
     # - potential collisions with dynamic obstacles
     # we check here if in the next frame we will be too close to any dynamic obstacle
     # if we hit each other in the next frame, we consider the path not clear
-    vx, vy = robot_movement.go_to(robot_pos=(start_pos[0], start_pos[1], 0), target=end_pos)
-    for obs, vel in zip(dynamic_obstacles, dynamic_obstacles_velocities):
-        next_obs_pos = (obs[0] + vel[0] * TIME_STEP, obs[1] + vel[1] * TIME_STEP)
-        next_robot_pos = (start_pos[0] + vx * TIME_STEP, start_pos[1] + vy * TIME_STEP)
+    # vx, vy = robot_movement.go_to(robot_pos=(start_pos[0], start_pos[1], 0), target=end_pos)
+    # for obs, vel in zip(dynamic_obstacles, dynamic_obstacles_velocities):
+    #     next_obs_pos = (obs[0] + vel[0] * TIME_STEP, obs[1] + vel[1] * TIME_STEP)
+    #     next_robot_pos = (start_pos[0] + vx * TIME_STEP, start_pos[1] + vy * TIME_STEP)
 
-        if distance(next_robot_pos, next_obs_pos) < 2 * ROBOT_RADIUS:
-            return False
+    #     if distance(next_robot_pos, next_obs_pos) < 2 * ROBOT_RADIUS:
+    #         return False
 
     return True
 
@@ -259,7 +345,13 @@ def is_point_inside_field(point):
     Returns:
         bool: True if inside the field polygon, False otherwise.
     """
-    field_polygon = Polygon(FIELD_POLYGON)
+    FIELD_POLYGON_WITH_MARGIN = Polygon([
+    (-4350, -2750),  # bottom-left corner
+    (-4350, 2750),   # top-left corner
+    (4350, 2750),    # top-right corner
+    (4350, -2750),   # bottom-right corner
+])
+    field_polygon = Polygon(FIELD_POLYGON_WITH_MARGIN)
     point_geom = Point(point)
     return field_polygon.contains(point_geom)
 
