@@ -151,57 +151,81 @@ def mark_dynamic_influence(a, dynamics: List[Tuple[Tuple[float,float], Tuple[flo
 
 NEIGHBORS_8 = [(-1,-1), (-1,0), (-1,1), (0,-1), (0,1), (1,-1), (1,0), (1,1)]
 
-def dijkstra_min_cost(a, start: Tuple[int,int], goal: Tuple[int,int]) -> Optional[List[Tuple[int,int]]]:
-    """
-    Dijkstra over grid minimizing sum of a[ix,iy] values along the visited cells.
-    Avoid cells with a >= 1000 (forbidden) entirely.
-    Returns path as list of (ix,iy) from start to goal inclusive or None if unreachable.
-    """
+
+def dijkstra_min_cost(a, start, goal):
+    turn_penalty = 5.0
     sx, sy = start
     gx, gy = goal
-    if a[sx, sy] >= 1000.0 or a[gx, gy] >= 1000.0:
-        return None
 
-    dist = np.full((NX, NY), np.inf)
-    prev = np.full((NX, NY, 2), -1, dtype=int)
-    # Priority queue elements: (cost_so_far, ix, iy)
+    # dist[ix][iy][dir_index]
+    # 9 possible directions: 8 movement dirs + 1 "no direction" (start)
+    dist = np.full((NX, NY, 9), np.inf)
+    prev = {}   # dictionary storing predecessor of full state
+
+    # index directions (-1,-1) ... (1,1) plus (0,0)
+    directions = [(0,0)]
+    for dx in [-1,0,1]:
+        for dy in [-1,0,1]:
+            if not (dx == 0 and dy == 0):
+                directions.append((dx,dy))
+
+    def dir_to_idx(dx,dy): return directions.index((dx,dy))
+
+    start_dir_idx = dir_to_idx(0,0)
+
+    # priority queue contains: (cost, ix, iy, dir_idx)
     pq = []
-    dist[sx, sy] = a[sx, sy]  # include starting cell cost
-    heapq.heappush(pq, (dist[sx, sy], sx, sy))
+    dist[sx, sy, start_dir_idx] = a[sx, sy]
+    heapq.heappush(pq, (a[sx, sy], sx, sy, start_dir_idx))
 
     while pq:
-        cost, ix, iy = heapq.heappop(pq)
-        if cost > dist[ix, iy]:
+        cost, ix, iy, dir_idx = heapq.heappop(pq)
+        if cost > dist[ix, iy, dir_idx]:
             continue
+
         if (ix, iy) == (gx, gy):
             break
+
+        dx_prev, dy_prev = directions[dir_idx]
+
         for dx, dy in NEIGHBORS_8:
             nx_ix = ix + dx
             ny_iy = iy + dy
-            if nx_ix < 0 or nx_ix >= NX or ny_iy < 0 or ny_iy >= NY:
+            if not (0 <= nx_ix < NX and 0 <= ny_iy < NY):
                 continue
-            if a[nx_ix, ny_iy] >= 1000.0:
+            if a[nx_ix, ny_iy] >= 1000:
                 continue
-            # cost to enter neighbor
-            new_cost = cost + a[nx_ix, ny_iy]
-            if new_cost < dist[nx_ix, ny_iy]:
-                dist[nx_ix, ny_iy] = new_cost
-                prev[nx_ix, ny_iy] = [ix, iy]
-                heapq.heappush(pq, (new_cost, nx_ix, ny_iy))
 
-    if not np.isfinite(dist[gx, gy]):
+            # determine turn penalty
+            if (dx_prev, dy_prev) == (0,0):
+                penalty = 0   # no previous direction at start
+            elif (dx_prev, dy_prev) == (dx, dy):
+                penalty = 0   # same direction = smooth
+            else:
+                penalty = turn_penalty
+
+            new_cost = cost + a[nx_ix, ny_iy] + penalty
+            new_dir_idx = dir_to_idx(dx, dy)
+
+            if new_cost < dist[nx_ix, ny_iy, new_dir_idx]:
+                dist[nx_ix, ny_iy, new_dir_idx] = new_cost
+                prev[(nx_ix, ny_iy, new_dir_idx)] = (ix, iy, dir_idx)
+                heapq.heappush(pq, (new_cost, nx_ix, ny_iy, new_dir_idx))
+
+    # find best direction at goal
+    best_dir = np.argmin(dist[gx, gy])
+    if not np.isfinite(dist[gx, gy, best_dir]):
         return None
 
     # reconstruct path
     path = []
-    curx, cury = gx, gy
-    while not (curx == -1 and cury == -1):
-        path.append((curx, cury))
-        px, py = prev[curx, cury]
-        if px == -1 and py == -1:
-            break
-        curx, cury = int(px), int(py)
+    cur = (gx, gy, best_dir)
+    while cur in prev:
+        ix, iy, _ = cur
+        path.append((ix, iy))
+        cur = prev[cur]
     path.reverse()
+
     return path
 
 
