@@ -60,8 +60,6 @@ def obstacle_avoidance_process(wm):
     robot_movement = RobotMovement()
     robots_yellow = wm.get_our_robots(True)
     robots_blue = wm.get_our_robots(False)
-    mid_point_found = False
-    mid_point = (2000, 0)
     # sender_yellow.send_command(RobotCommand(robot_id=ROBOT_ID, vx=-3, vy=-3, w=0.0, kick=0, dribble=0))
 
     # Remove Robots that are not present in the scenario
@@ -134,10 +132,10 @@ def obstacle_avoidance_process(wm):
         # static_robots_pos: list of (x,y) positions
         # dynamic_robots_pos: list of (x,y) positions 
         # ...
-        if distance(pos_2d, path[0]) <= 100:
+        if len(path) > 1 and distance(pos_2d, path[0]) <= 100:
             path.pop(0)
 
-        vx, vy = robot_movement.go_to(robot_pos=robot_pos, target=path[0])
+        vx, vy = robot_movement.go_to(robot_pos=robot_pos, target=path[0], max_acceleration=2000)
         cmd = RobotCommand(robot_id=ROBOT_ID, vx=vx, vy=vy, w=0.0, kick=0, dribble=0)
 
         sender_yellow.send_command(cmd)
