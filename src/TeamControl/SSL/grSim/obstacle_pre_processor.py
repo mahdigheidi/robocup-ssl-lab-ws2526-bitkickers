@@ -115,7 +115,7 @@ def perpendicular_distance_point_to_line(px, py, x1, y1, x2, y2) -> float:
 
 def mark_dynamic_influence(a, dynamics: List[Tuple[Tuple[float,float], Tuple[float,float]]],
                            radius: float = ROBOT_RADIUS,
-                           inc: float = 200.0):
+                           inc: float = 100.0):
     """
     For each dynamic obstacle given by (start, goal), increase by `inc` the cells whose center's
     perpendicular distance to the line (start->goal) is less than threshold.
@@ -231,6 +231,7 @@ def preprocess_best_path(start, goal, static_obstacles, dynamic_obstacles):
 
     path = dijkstra_min_cost(a, start_cell, goal_cell)
     path_world = [cell_to_point(ix, iy) for ix, iy in path]
+    path_world[-1] = goal
 
     return path_world
 
