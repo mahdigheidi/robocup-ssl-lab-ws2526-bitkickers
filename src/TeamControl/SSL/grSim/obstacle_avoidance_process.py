@@ -17,8 +17,11 @@ from TeamControl.network.robot_command import RobotCommand
 from TeamControl.robot.Movement import RobotMovement
 from TeamControl.robot.spawn_robot import spawn_robots_at_initial_positions, remove_robots_not_in_scenario
 from TeamControl.ball.send_ball_grsim import send_ball_to_grsim
+from TeamControl.SSL.grSim.obstacle_pre_processor import preprocess_best_path
 
 TIME_STEP = 0.05  # seconds
+X_CELL_SIZE = 100  # mm
+Y_CELL_SIZE = 100  # mm
 
 def obstacle_avoidance_process(wm):
     # Load scenario from command line argument or default
@@ -38,6 +41,8 @@ def obstacle_avoidance_process(wm):
     sender_blue = grSimSender(ip=SIM_IP, port=CMD_LISTEN_PORT, is_yellow=False)
 
     version = 0
+
+    # Pre-processing
 
     start_time = time.time()
     TIME_LIMIT = 30  # seconds
@@ -72,6 +77,9 @@ def obstacle_avoidance_process(wm):
     robot_pos = (main_agent['start'][0], main_agent['start'][1], 0)
     for dyn_robot_id, dyn_robot_data in dynamic_robots.items():
         dyn_robot_cur_pos[dyn_robot_id] = (dyn_robot_data['start'][0], dyn_robot_data['start'][1], 0)
+
+    dynamic_paths = [(data['start'], data['goal']) for id, data in dynamic_robots.items()]
+    path = preprocess_best_path(main_agent['start'], main_agent['goal'], static_robots_pos, dynamic_paths)
 
     while time.time() - start_time < TIME_LIMIT:
         if version < wm.get_version():
@@ -126,36 +134,34 @@ def obstacle_avoidance_process(wm):
         # static_robots_pos: list of (x,y) positions
         # dynamic_robots_pos: list of (x,y) positions 
         # ...
-        next_target = main_agent['goal']
-        if direct_path_is_clear(pos_2d, main_agent['goal'],
-                                  static_robots_pos, dynamic_robots_pos, dynamic_robots_velocities, robot_movement):
-            next_target = main_agent['goal']
-        elif not mid_point_found:
-            # we find a point in the field which is reachable directly from current position
-            # and from which the goal is also reachable directly
-            while True:
-                sample_x = random.normalvariate(2500, 500)
-                sample_y = random.uniform(0, 1000)
-                sample_point = (sample_x, sample_y)
-                if not is_point_inside_field(sample_point):
-                    continue
-                if direct_path_is_clear(pos_2d, sample_point,
-                                          static_robots_pos, dynamic_robots_pos, dynamic_robots_velocities, robot_movement) and \
-                   direct_path_is_clear(sample_point, main_agent['goal'],
-                                          static_robots_pos, dynamic_robots_pos, dynamic_robots_velocities, robot_movement):
-                    next_target = sample_point
-                    mid_point_found = True
-                    mid_point = sample_point
-                    break
-        else:
-            next_target = mid_point
+        if distance(pos_2d, path[0]) <= 100:
+            path.pop(0)
 
-        vx, vy = robot_movement.go_to(robot_pos=robot_pos, target=next_target)
+        vx, vy = robot_movement.go_to(robot_pos=robot_pos, target=path[0])
         cmd = RobotCommand(robot_id=ROBOT_ID, vx=vx, vy=vy, w=0.0, kick=0, dribble=0)
 
         sender_yellow.send_command(cmd)
     else:
         print("Time limit reached.\n0 POINTS")
+
+def will_collide_in_next_frame(robot_pos, robot_velocity, dyn_obstacle_pos, dyn_obstacle_velocity):
+    """
+    Check if the robot will collide with a dynamic obstacle in the next frame.
+
+    Args:
+        robot_pos (tuple): (x, y) position of the robot.
+        robot_velocity (tuple): (vx, vy) velocity of the robot.
+        dyn_obstacle_pos (tuple): (x, y) position of the dynamic obstacle.
+        dyn_obstacle_velocity (tuple): (vx, vy) velocity of the dynamic obstacle.
+    Returns:
+        bool: True if a collision will occur, False otherwise.
+    """
+    t_x = (robot_pos[0] - dyn_obstacle_pos[0]) / (dyn_obstacle_velocity[0] - robot_velocity[0])
+    t_y = (robot_pos[1] - dyn_obstacle_pos[1]) / (dyn_obstacle_velocity[1] - robot_velocity[1])
+    if abs(t_x - t_y) < TIME_STEP:
+        # check if at that time they are close enough to collide
+        return True
+    return False
 
 def direct_path_is_clear(start_pos, end_pos, static_obstacles, dynamic_obstacles, dynamic_obstacles_velocities, robot_movement: RobotMovement):
     """
