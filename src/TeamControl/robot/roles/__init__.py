@@ -1,7 +1,7 @@
 """Roles package - strategic role implementations."""
 
-from TeamControl.robot.roles.passing import PassingDemo
+from TeamControl.robot.roles.passer import Passer
 
 __all__ = [
-    "PassingDemo",
+    "Passer",
 ]

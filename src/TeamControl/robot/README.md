@@ -1,221 +1,307 @@
 # Robot Architecture
 
-This document explains the robot behavior system architecture. Read this before adding new robot behaviors or modifying existing ones.
+This guide shows you how to implement robot behaviors using our Role → Phase → State architecture.
 
-## Overview
+## Quick Overview
 
-The robot system uses a three-level hierarchy: **Role → Phase → State**
+Robot behavior is organized in three levels:
 
-- **Role**: What position the robot plays (e.g., Attacker, Goalkeeper, PassingDemo)
-- **Phase**: What the robot is currently doing (e.g., Chasing, Passing, Receiving)
-- **State**: Low-level execution details within a phase (e.g., ChasingBallState, KickingState)
+- **Role** (class): What the robot does overall (e.g., `Passer`, `Goalkeeper`)
+- **Phase** (enum): Current tactical behavior (e.g., `CHASING`, `PASSING`, `RECEIVING`)
+- **State** (automatic): Low-level execution (e.g., `ChasingBallState`, `KickingState`)
 
-**Key principle**: Roles are types (classes), Phases are runtime enums, States are state machine implementations.
+**Key idea**: Each role is a self-contained class that defines its phases and maps them to state machines. No global registrations needed.
 
-## Why This Design?
-
-**Problem**: The original architecture used string-based roles ("passer", "receiver") and required hard-coded dictionaries mapping roles to states. Adding new behaviors meant updating multiple registration points.
-
-**Solution**: 
-- Each role is a class that defines its own valid phases
-- Phases map to reusable state machine implementations
-- No global registration - each role self-describes its capabilities
-- Type safety prevents invalid role/phase combinations
-
-**Benefit**: Adding a new role or behavior is localized to one file. No hunting for registration dictionaries.
-
-## Directory Structure
-
-```
-robot/
-  README.md              # This file
-  context.py             # RobotContext - shared data for state machines
-  robot.py               # Robot class - generic over role type
-  Movement.py            # Low-level movement controller
-  spawn_robot.py         # Simulator integration
-  
-  phases/                # Shared, reusable state machine implementations
-    __init__.py
-    ball_handling.py     # Chasing, Passing, Receiving, Dribbling
-    shooting.py          # Shooting state machines
 ## File Structure
 
 ```
 robot/
-  context.py             # RobotContext dataclass - shared data for state machines
-  robot.py               # Robot class - manages role instance and phase transitions
+  context.py             # WorldState, RobotContext, EntityState
+  robot.py               # Robot class - executes role behaviors
   role.py                # Role abstract base class
   Movement.py            # Low-level movement controller
-  spawn_robot.py         # Simulator spawn commands
   
   phases/                # Reusable state machine implementations
-## Core Components
-
-### RobotContext (`context.py`)
-
-Dataclass containing all information needed for decision-making:
-
-```python
-@dataclass(slots=True)
-class RobotContext:
-    robot_id: int
-    my_pos: np.ndarray           # [x, y, orientation]
-    my_movement: RobotMovement   # Movement controller instance
-    other_pos: np.ndarray        # Other robot position
-    ball_pos: np.ndarray         # Ball position [x, y]
-    ball_velocity: np.ndarray    # Ball velocity [vx, vy]
-    has_possession: bool         # Whether robot has ball
+    ball_handling.py     # Chasing, passing, receiving states + constants
+  
+  roles/                 # Role definitions
+    passer.py            # Example: two-robot passing drill
 ```
 
-**Important**: This is passed to every state's `execute()` method. Add fields here if all states need new information.
+## Understanding the Components
 
-### Role (`role.py`)
+### WorldState (Single Source of Truth)
 
-Abstract base class that all roles must extend:
+Tracks all entities and computes velocities automatically:
+
+```python
+world_state = WorldState()
+
+# In your main loop:
+world_state.update(wm, timestamp)  # Updates ball and all robot positions/velocities
+
+# Get context for a specific robot:
+context = world_state.get_robot_context(robot_id=0, is_yellow=True)
+```
+
+### EntityState
+
+Position + velocity for any entity (robot or ball):
+
+```python
+@dataclass(frozen=True)
+class EntityState:
+    position: np.ndarray  # [x, y] for ball, [x, y, orientation] for robots
+    velocity: np.ndarray  # [vx, vy] or [vx, vy, vw]
+```
+
+### RobotContext
+
+Immutable snapshot of world state for one robot at one point in time:
+
+```python
+@dataclass
+class RobotContext:
+    robot_id: int
+    is_yellow: bool
+    my_state: EntityState              # My position and velocity
+    ball: EntityState                  # Ball position and velocity
+    teammates: dict[int, EntityState]  # Other robots on my team (excluding self)
+    opponents: dict[int, EntityState]  # All robots on opposing team
+    has_possession: bool               # Whether I have the ball
+```
+
+**Built automatically from WorldState** - you don't create this manually.
+
+Access data in states:
+```python
+# Position
+my_pos = context.my_state.position          # [x, y, orientation]
+ball_pos = context.ball.position            # [x, y]
+teammate_pos = context.teammates[1].position  # [x, y, orientation]
+
+# Velocity
+my_velocity = context.my_state.velocity     # [vx, vy, vw]
+ball_velocity = context.ball.velocity       # [vx, vy]
+```
+
+### Role (Abstract Base Class)
+
+All roles extend this:
 
 ```python
 class Role(ABC):
     @abstractmethod
     def get_initial_phase(self) -> Enum:
-        """Return starting phase when robot spawns."""
-        pass
-    
-    @abstractmethod
-    def create_phase_machine(self, phase: Enum) -> StateMachine[RobotContext]:
-        """Create state machine for the given phase."""
-        pass
+Example from `passing_process.py`:
+```python
+# Create WorldState once
+world_state = WorldState()
+
+# In your control loop:
+world_state.update(wm, timestamp)  # Update once per frame
+
+if passer_id == 0:
+    if check_possession(ball_pos, robot0.position):
+        robot0.switch_phase(Passer.Phase.PASSING)  # You control phase
+    else:
+        robot0.switch_phase(Passer.Phase.CHASING)
+        
+# Execute with world_state - context built automatically
+robot0.execute_behavior(world_state=world_state, sender=sender, ...)
+# States transition automatically inside each phase
 ```
 
-**Your role must**:
-1. Define a nested `Phase` enum
-2. Implement `get_initial_phase()` to return a Phase value
-3. Implement `create_phase_machine()` to instantiate the right state machine for each phase
+## Configuration Constants
 
-### Robot (`robot.py`)
+Behavior tuning constants are defined at the top of state machine files. Example from `phases/ball_handling.py`:
 
-Generic class `Robot[R]` where R is the role type:
+```python
+# Distance thresholds (mm)
+CHASE_TO_APPROACH_DISTANCE = 200
+APPROACH_TO_CHASE_DISTANCE = 250
 
-## How To: Add a New Role
+# Speed and acceleration (mm/s and mm/s²)
+CHASE_MAX_SPEED = 5000
+CHASE_MAX_ACCELERATION = 1300
+APPROACH_MAX_SPEED = 1500
+APPROACH_MAX_ACCELERATION = 800
 
-**Example**: Create a `Goalkeeper` role
+# Passing alignment
+ALIGNMENT_THRESHOLD = 0.1  # radians (~5.7 degrees)
+KICK_POWER = 5
+```
 
-1. **Create `roles/goalkeeper.py`**:
+**To tune robot behavior**: Change these constants instead of magic numbers in the code.
+- **Phase transitions**: Controlled by your main process (e.g., switch from CHASING to PASSING)
+- **State transitions**: Automatic within each phase's state machine
+
+Example from `passing_process.py`:
+```python
+**2. Use it in your main process:**
+
+```python
+from TeamControl.robot.robot import Robot
+from TeamControl.robot.roles.goalkeeper import Goalkeeper
+from TeamControl.robot.context import WorldState
+
+world_state = WorldState()
+goalkeeper = Robot(robot_id=0, is_yellow=True, role=Goalkeeper())
+goalkeeper.spawn(x=-4500, y=0, orientation=0)
+
+# In your control loop:
+world_state.update(wm, timestamp)  # Update world state
+
+goalkeeper.switch_phase(Goalkeeper.Phase.DIVING)  # Change phases
+goalkeeper.execute_behavior(world_state=world_state, sender=sender, ...)
+```. Create `roles/goalkeeper.py`:**
 
 ```python
 from enum import Enum, auto
-from TeamControl.robot.role import Role
-from TeamControl.robot.context import RobotContext
-from TeamControl.utils.state_machine import StateMachine
-from TeamControl.robot.phases import ChasingBallStateMachine, PassingStateMachine
-
-class Goalkeeper(Role):
-    """Goalkeeper role - defends goal."""
-    
-    class Phase(Enum):
-        POSITIONING = auto()  # Position in goal
-        DIVING = auto()       # Dive to block shot
-        CLEARING = auto()     # Clear ball from goal area
-    
-    def get_initial_phase(self) -> Enum:
-        return self.Phase.POSITIONING
-    
-    def create_phase_machine(self, phase: Enum) -> StateMachine[RobotContext]:
-        if phase == self.Phase.POSITIONING:
-            return PositioningStateMachine()  # You'll create this
-        elif phase == self.Phase.DIVING:
-            return DivingStateMachine()       # You'll create this
-        elif phase == self.Phase.CLEARING:
-            return PassingStateMachine()      # Reuse existing!
-        else:
-            raise ValueError(f"Unknown phase: {phase}")
-## How To: Add a New Shared Capability
-
-**Example**: Create a `ShootingStateMachine`
-
-1. **Create state classes in `phases/shooting.py`**:
-
 ```python
 from TeamControl.utils.state_machine import State, StateMachine
 from TeamControl.robot.context import RobotContext
+from TeamControl.network.robot_command import RobotCommand
+from typing import Optional, Type, Any
+import numpy as np
 
-class AimingState(State[RobotContext]):
+GOAL_CENTER = np.array([-4500, 0])  # Our goal position
+
+class PositioningState(State[RobotContext]):
+    """Stay between ball and goal."""
+    
+    def handle_transition(self, context: RobotContext) -> Optional[Type[State[RobotContext]]]:
+        # State transitions happen automatically based on conditions
+        ball_dist = np.linalg.norm(context.ball.position - context.my_state.position[:2])
+        if ball_dist < 500:  # Ball too close
+            return DivingState
+        return None  # Stay in this state
+    
+    def execute(self, context: RobotContext, **kwargs: Any) -> None:
+        sender = kwargs["sender"]
+        movement = kwargs["movement"]  # Passed via execute_behavior
+        
+        # Position between ball and goal
+        ball_to_goal = GOAL_CENTER - context.ball.position
+        target_pos = GOAL_CENTER + 0.3 * ball_to_goal
+        
+        vx, vy = movement.go_to(
+            context.my_state.position, target_pos, max_speed=2000
+        )
+        w = movement.face_towards(
+            context.my_state.position, context.ball.position
+        )
+        
+        sender.send_command(
+            RobotCommand(context.robot_id, vx, vy, w, kick=0, dribble=0)
+        )
+
+class DivingState(State[RobotContext]):
+    """Dive to intercept ball."""
+    
+    def handle_transition(self, context: RobotContext) -> Optional[Type[State[RobotContext]]]:
+        if context.has_possession:
+            return PositioningState  # Got the ball, return to position
+        return None
+    
+    def execute(self, context: RobotContext, **kwargs: Any) -> None:
+        sender = kwargs["sender"]
+        movement = kwargs["movement"]
+        
+        # Aggressive chase
+        vx, vy = movement.go_to(
+            context.my_state.position, context.ball.position,
+            max_acceleration=2000, max_speed=6000
+        )
+        w = movement.face_towards(context.my_state.position, context.ball.position)
+        sender.send_command(
+            RobotCommand(context.robot_id, vx, vy, w, kick=0, dribble=1)
+        )
+class PositioningState(State[RobotContext]):
+    """Stay between ball and goal."""
+    
     def handle_transition(self, context: RobotContext):
-        if aligned_with_goal(context):
-            return ShootingState
+        # State transitions happen automatically based on conditions
+        ball_dist = np.linalg.norm(context.ball_pos - context.my_pos[:2])
+        if ball_dist < 500:  # Ball too close
+            return DivingState
+        return None  # Stay in this state
+    
+    def execute(self, context: RobotContext, **kwargs):
+        sender = kwargs["sender"]
+        
+        # Position between ball and goal
+        ball_to_goal = GOAL_CENTER - context.ball_pos
+        target_pos = GOAL_CENTER + 0.3 * ball_to_goal
+        
+        vx, vy = context.my_movement.go_to(
+            context.my_pos, target_pos, max_speed=2000
+        )
+        w = context.my_movement.face_towards(
+            context.my_pos, context.ball_pos
+        )
+        
+        sender.send_command(
+            RobotCommand(context.robot_id, vx, vy, w, kick=0, dribble=0)
+        )
+
+class DivingState(State[RobotContext]):
+    """Dive to intercept ball."""
+    
+    def handle_transition(self, context: RobotContext):
+        if context.has_possession:
+            return PositioningState  # Got the ball, return to position
         return None
     
     def execute(self, context: RobotContext, **kwargs):
         sender = kwargs["sender"]
-        # Aim toward goal
-        w = context.my_movement.face_towards(context.my_pos, GOAL_POS, 3)
-        sender.send_command(RobotCommand(context.robot_id, 0, 0, w, 0, 1))
+        # Aggressive chase
+        vx, vy = context.my_movement.go_to(
+            context.my_pos, context.ball_pos,
+            max_acceleration=2000, max_speed=6000
+        )
+        w = context.my_movement.face_towards(context.my_pos, context.ball_pos)
+        sender.send_command(
+            RobotCommand(context.robot_id, vx, vy, w, kick=0, dribble=1)
+        )
 
-class ShootingState(State[RobotContext]):
-    # ... implementation
-
-class ShootingStateMachine(StateMachine[RobotContext]):
+class PositioningStateMachine(StateMachine[RobotContext]):
+    """State machine for goalkeeper positioning."""
+    
     def __init__(self):
-        aiming = AimingState()
-        shooting = ShootingState()
-        super().__init__(initial_state=aiming)
-        self.register_state(shooting)
+        positioning = PositioningState()
+        diving = DivingState()
+        
+        super().__init__(initial_state=positioning)
+        self.register_state(diving)
 ```
 
-2. **Export in `phases/__init__.py`**:
+**2. Export it in `phases/__init__.py`:**
 
 ```python
-from TeamControl.robot.phases.shooting import ShootingStateMachine
+from TeamControl.robot.phases.goalkeeping import PositioningStateMachine
 
-__all__ = ["ChasingBallStateMachine", "PassingStateMachine", 
-           "ReceivingStateMachine", "ShootingStateMachine"]
-## Understanding Phase Transitions
+__all__ = [
+    "ChasingBallStateMachine",
+    "PassingStateMachine", 
+    "ReceivingStateMachine",
+    "PositioningStateMachine",  # Add your new one
+]
+```
 
-**Phase transitions are controlled by your main process**, not by the robot itself.
+**3. Use it in your role** (already shown above in `Goalkeeper.create_phase_machine`)
 
-Example from `passing_process.py`:
+## Reusing Existing State Machines
+
+Check `phases/ball_handling.py` for ready-to-use state machines:
+
+- `ChasingBallStateMachine` - Chase and capture ball
+- `PassingStateMachine` - Align and kick to target
+- `ReceivingStateMachine` - Position to intercept passes
+
+Example - both roles can clear the ball the same way:
 
 ```python
-# Determine which robot should chase the ball
-passer_id = determine_ball_responsibility(robot0.position, robot1.position, ball_pos, ball_velocity)
-
-if passer_id == 0:
-    if check_possession(ball_pos, robot0.position):
-        robot0.switch_phase(PassingDemo.Phase.PASSING)  # Has ball → pass
-    else:
-        robot0.switch_phase(PassingDemo.Phase.CHASING)  # No ball → chase
-    robot1.switch_phase(PassingDemo.Phase.RECEIVING)     # Other robot receives
-else:
-    # Reverse roles
-    robot1.switch_phase(...)
-    robot0.switch_phase(PassingDemo.Phase.RECEIVING)
-```
-
-**State transitions are automatic** within a phase's state machine. You don't call them manually.
-
-## Debugging and Logging
-
-Phase and state transitions are automatically logged:
-
-```
-[02:31:09] R0[PassingDemo] PHASE: RECEIVING -> CHASING
-    R0 state: ChasingBallState -> ApproachingBallState
-[02:31:10] R0[PassingDemo] PHASE: CHASING -> PASSING
-    R0 state: AligningWithTargetState -> KickingState
-```
-
-- **Magenta**: Phase transitions (high-level strategy changes)
-- **Cyan**: State transitions (low-level execution changes)
-
-Logging is configured in the main process (e.g., `passing_process.py`). See that file for the logging setup if you need to adjust it.
-
-## Common Patterns
-
-### Sharing State Machines Between Roles
-
-Good! That's the point of `phases/`:
-
-```python
-# Both Attacker and Goalkeeper can clear the ball
 class Attacker(Role):
     def create_phase_machine(self, phase):
         if phase == self.Phase.CLEARING:
@@ -224,65 +310,38 @@ class Attacker(Role):
 class Goalkeeper(Role):
     def create_phase_machine(self, phase):
         if phase == self.Phase.CLEARING:
-            return PassingStateMachine()  # Same implementation!
+            return PassingStateMachine()  # Same!
 ```
 
-### Role-Specific Behavior
+## Debugging
 
-Keep it in the role file, not in shared phases:
+Phase and state transitions are automatically logged:
 
+```
+[02:31:09] R0[Passer] PHASE: RECEIVING -> CHASING
+    R0 state: ChasingBallState -> ApproachingBallState
+```
+
+- **Magenta**: Phase transitions (tactical changes)
+- **Cyan**: State transitions (execution changes)
+
+Access current state for debugging:
 ```python
-# DON'T add role-specific logic to PassingStateMachine
-# DO create a new state machine in your role file if needed
-
-class Goalkeeper(Role):
-    # ... in roles/goalkeeper.py, not phases/
+print(robot.current_state_name)  # "ChasingBallState"
+print(robot.current_phase)        # Passer.Phase.CHASING
 ```
 
-### Accessing Current State
+## Best Practices
 
-For debugging or conditional logic:
+✅ **DO**: Reuse state machines from `phases/` when possible  
+✅ **DO**: Keep role-specific logic in the role file  
+✅ **DO**: Control phase transitions in your main process  
+✅ **DO**: Let states transition automatically  
 
-```python
-current_state_name = robot.current_state_name  # Returns e.g., "ChasingBallState"
-current_phase = robot.current_phase  # Returns Phase enum value
-```
-1. Create `roles/new_role.py`
-2. Define role class extending `Role`
-3. Define role-specific `Phase` enum (nested class)
-4. Implement `get_initial_phase()`, `get_valid_phases()`, `create_phase_machine()`
-5. Compose existing phase state machines or create new ones
-
-### Adding a New Shared Capability
-
-1. Create state machine in `phases/` directory
-2. Implement with `State[RobotContext]` interface
-3. Import and use in any role's `create_phase_machine()`
-
-### Adding Role-Specific Behavior
-
-Keep it in the role file - don't pollute shared phases with role-specific logic.
-
-## Terminology Reference
-
-| Term | Level | Nature | Example |
-|------|-------|--------|---------|
-| **Role** | Strategic | Type (class) | Attacker, Goalkeeper |
-| **Phase** | Tactical | Runtime (enum) | Chasing, Passing, Diving |
-| **State** | Execution | Runtime | Accelerating, Aligning, Kicking |
-| **Capability** | - | Shared implementation | PassingStateMachine |
-
-## Philosophy
-
-The architecture balances:
-- **Flexibility**: Easy to add roles and capabilities
-- **Type safety**: Prevent invalid configurations at compile time
-- **Reusability**: Share code across roles
-- **Clarity**: Clear separation of strategic vs tactical vs execution logic
-- **Simplicity**: Avoid over-engineering, prefer explicit over magic
-
-Each robot is autonomous, with its own role and phase state machine. The system coordinates robots through shared world state (RobotContext) rather than direct communication.
+❌ **DON'T**: Add role-specific logic to shared state machines  
+❌ **DON'T**: Manually trigger state transitions  
 
 ---
 
-*This architecture is designed to scale from simple two-robot drills to full 11v11 soccer with complex formations and tactics.*
+**Next**: See `roles/passer.py` and `SSL/grSim/passing_process.py` for a complete working example.
+

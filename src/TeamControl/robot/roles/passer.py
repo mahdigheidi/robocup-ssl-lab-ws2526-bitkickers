@@ -1,4 +1,4 @@
-"""Passing demo role - for two-robot passing exercise."""
+"""Passing role - for two-robot passing exercise."""
 
 from enum import Enum, auto
 from TeamControl.robot.role import Role
@@ -11,15 +11,15 @@ from TeamControl.robot.phases import (
 )
 
 
-class PassingDemo(Role):
-    """Demo role for two-robot passing drill.
+class Passer(Role):
+    """Role for two-robot passing drill.
     
     Both robots use this role and dynamically switch between
     ball-handling phases based on ball responsibility.
     """
 
     class Phase(Enum):
-        """Phases for passing demo."""
+        """Phases for passing."""
         CHASING = auto()      # Chase and capture ball
         PASSING = auto()      # Align and kick to other robot
         RECEIVING = auto()    # Position and intercept passes

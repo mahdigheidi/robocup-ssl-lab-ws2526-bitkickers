@@ -9,6 +9,38 @@ from TeamControl.robot.context import RobotContext
 from TeamControl.ball.ball_idle_spawner import BallIdleSpawner
 
 
+# =============================================================================
+# Configuration Constants
+# =============================================================================
+
+# Distance thresholds (mm)
+CHASE_TO_APPROACH_DISTANCE = 200  # Switch from fast chase to gentle approach
+APPROACH_TO_CHASE_DISTANCE = 250  # Switch back to chase if ball moves away
+
+# Speed and acceleration (mm/s and mm/s²)
+CHASE_MAX_SPEED = 5000
+CHASE_MAX_ACCELERATION = 1300
+APPROACH_MAX_SPEED = 1500
+APPROACH_MAX_ACCELERATION = 800
+INTERCEPT_MAX_SPEED = 3000
+
+# Passing alignment
+ALIGNMENT_THRESHOLD = 0.1  # radians (~5.7 degrees)
+KICK_POWER = 5  # grSim kick power units
+
+# Receiving behavior
+INTERCEPT_MIN_BALL_SPEED = 500  # mm/s - below this, don't intercept
+INTERCEPT_THRESHOLD_SPEED = 800  # mm/s - speed at which interception becomes aggressive
+INTERCEPT_DOT_THRESHOLD = 0.5  # Dot product threshold for "moving towards robot"
+INTERCEPT_SHIFT_FACTOR = 0.8  # How far back along trajectory to position
+
+# Field margins
+RECEIVER_FIELD_MARGIN = 200  # mm from field boundaries
+
+# Angular acceleration
+ALIGN_ANGULAR_ACCELERATION = 3  # rad/s²
+
+
 def distance(pos0: np.ndarray, pos1: np.ndarray) -> float:
     """Calculate Euclidean distance between two 2D positions."""
     return float(np.linalg.norm(pos0[:2] - pos1[:2]))
@@ -22,23 +54,24 @@ class ChasingBallState(State[RobotContext]):
     """Fast approach to ball from distance."""
 
     def handle_transition(self, context: RobotContext) -> Optional[Type[State[RobotContext]]]:
-        ball_dist = distance(context.ball_pos, context.my_pos)
-        if ball_dist < 200:
+        ball_dist = distance(context.ball.position, context.my_state.position)
+        if ball_dist < CHASE_TO_APPROACH_DISTANCE:
             return ApproachingBallState
         return None
 
     def execute(self, context: RobotContext, **kwargs: Any) -> None:
         sender: grSimSender = kwargs["sender"]
+        movement = kwargs["movement"]
         
-        vx, vy = context.my_movement.go_to(
-            context.my_pos,
-            context.ball_pos,
+        vx, vy = movement.go_to(
+            context.my_state.position,
+            context.ball.position,
             kicker_to_target=True,
-            max_acceleration=1300,
-            max_speed=5000,
+            max_acceleration=CHASE_MAX_ACCELERATION,
+            max_speed=CHASE_MAX_SPEED,
         )
-        w = context.my_movement.face_towards(
-            robot_pos=context.my_pos, target=context.ball_pos
+        w = movement.face_towards(
+            robot_pos=context.my_state.position, target=context.ball.position
         )
         sender.send_command(
             RobotCommand(robot_id=context.robot_id, vx=vx, vy=vy, w=w, kick=0, dribble=1)
@@ -49,9 +82,9 @@ class ApproachingBallState(State[RobotContext]):
     """Gentle approach when close to ball - prevents bumping."""
 
     def handle_transition(self, context: RobotContext) -> Optional[Type[State[RobotContext]]]:
-        ball_dist = distance(context.ball_pos, context.my_pos)
+        ball_dist = distance(context.ball.position, context.my_state.position)
         
-        if ball_dist > 250:
+        if ball_dist > APPROACH_TO_CHASE_DISTANCE:
             return ChasingBallState
         if context.has_possession:
             return AligningWithTargetState
@@ -59,16 +92,17 @@ class ApproachingBallState(State[RobotContext]):
 
     def execute(self, context: RobotContext, **kwargs: Any) -> None:
         sender: grSimSender = kwargs["sender"]
+        movement = kwargs["movement"]
         
-        vx, vy = context.my_movement.go_to(
-            context.my_pos,
-            context.ball_pos,
+        vx, vy = movement.go_to(
+            context.my_state.position,
+            context.ball.position,
             kicker_to_target=True,
-            max_acceleration=800,
-            max_speed=1500,
+            max_acceleration=APPROACH_MAX_ACCELERATION,
+            max_speed=APPROACH_MAX_SPEED,
         )
-        w = context.my_movement.face_towards(
-            robot_pos=context.my_pos, target=context.ball_pos
+        w = movement.face_towards(
+            robot_pos=context.my_state.position, target=context.ball.position
         )
         sender.send_command(
             RobotCommand(robot_id=context.robot_id, vx=vx, vy=vy, w=w, kick=0, dribble=1)
@@ -99,24 +133,45 @@ class AligningWithTargetState(State[RobotContext]):
         if not context.has_possession:
             return ApproachingBallState
         
-        w = context.my_movement.face_towards(
-            robot_pos=context.my_pos,
-            target=context.other_pos,
-            max_angular_acceleration=3,
-        )
-        if w == 0:
+        # Check if aligned with target directly
+        if not context.teammates:
+            return None
+        
+        target_pos = list(context.teammates.values())[0].position
+        
+        # Calculate angle to target
+        my_orientation = context.my_state.position[2]  # Current orientation
+        dx = target_pos[0] - context.my_state.position[0]
+        dy = target_pos[1] - context.my_state.position[1]
+        angle_to_target = np.arctan2(dy, dx)
+        
+        # Normalize angle difference to [-pi, pi]
+        angle_diff = angle_to_target - my_orientation
+        angle_diff = np.arctan2(np.sin(angle_diff), np.cos(angle_diff))
+        
+        # If aligned, transition to kicking
+        if abs(angle_diff) < ALIGNMENT_THRESHOLD:
             return KickingState
+        
         return None
 
     def execute(self, context: RobotContext, **kwargs: Any) -> None:
         sender: grSimSender = kwargs["sender"]
+        movement = kwargs["movement"]
+        
+        # Get first teammate as passing target
+        if not context.teammates:
+            return
+        
+        target_pos = list(context.teammates.values())[0].position
         
         vx, vy = 0, 0
-        w = context.my_movement.face_towards(
-            robot_pos=context.my_pos,
-            target=context.other_pos,
-            max_angular_acceleration=3,
+        w = movement.face_towards(
+            robot_pos=context.my_state.position,
+            target=target_pos,
+            max_angular_acceleration=ALIGN_ANGULAR_ACCELERATION,
         )
+        
         sender.send_command(
             RobotCommand(robot_id=context.robot_id, vx=vx, vy=vy, w=w, kick=0, dribble=1)
         )
@@ -134,12 +189,12 @@ class KickingState(State[RobotContext]):
         sender: grSimSender = kwargs["sender"]
         
         sender.send_command(
-            RobotCommand(robot_id=context.robot_id, vx=0, vy=0, w=0, kick=5, dribble=0)
+            RobotCommand(robot_id=context.robot_id, vx=0, vy=0, w=0, kick=KICK_POWER, dribble=0)
         )
 
 
 class PassingStateMachine(StateMachine[RobotContext]):
-    """State machine for passing the ball to other_pos target."""
+    """State machine for passing the ball to a teammate."""
     
     def __init__(self):
         aligning = AligningWithTargetState()
@@ -161,10 +216,10 @@ def should_intercept(ball_pos: np.ndarray, ball_velocity: np.ndarray, robot_pos:
     """Check if ball is moving toward robot and should be intercepted."""
     ball_speed = np.linalg.norm(ball_velocity)
     
-    if ball_speed < 500:  # Ball too slow, just position
+    if ball_speed < INTERCEPT_MIN_BALL_SPEED:
         return False
     
-    if ball_speed < 800:  # Moving but not fast
+    if ball_speed < INTERCEPT_THRESHOLD_SPEED:
         return False
     
     # Check if ball moving toward robot
@@ -178,7 +233,7 @@ def should_intercept(ball_pos: np.ndarray, ball_velocity: np.ndarray, robot_pos:
     to_robot_normalized = to_robot / to_robot_dist
     dot = np.dot(ball_direction, to_robot_normalized)
     
-    return dot > 0.5  # Moving toward robot
+    return dot > INTERCEPT_DOT_THRESHOLD
 
 
 def calculate_interception_point(ball_pos: np.ndarray, ball_velocity: np.ndarray) -> np.ndarray:
@@ -189,7 +244,7 @@ def calculate_interception_point(ball_pos: np.ndarray, ball_velocity: np.ndarray
     
     # Project backward along trajectory
     ball_direction = ball_velocity / ball_speed
-    shift_distance = 0.8 * ball_speed
+    shift_distance = INTERCEPT_SHIFT_FACTOR * ball_speed
     interception_point = ball_pos - ball_direction * shift_distance
     
     return interception_point
@@ -203,7 +258,7 @@ def calculate_receiver_position(
     field_x_max: float,
     field_y_min: float,
     field_y_max: float,
-    margin: float = 200,
+    margin: float = RECEIVER_FIELD_MARGIN,
 ) -> np.ndarray:
     """Calculate position for receiver at minimum distance from passer."""
     delta = receiver_pos[:2] - passer_pos[:2]
@@ -242,18 +297,25 @@ class PositioningState(State[RobotContext]):
     """Position to receive pass."""
 
     def handle_transition(self, context: RobotContext) -> Optional[Type[State[RobotContext]]]:
-        if should_intercept(context.ball_pos, context.ball_velocity, context.my_pos):
+        if should_intercept(context.ball.position, context.ball.velocity, context.my_state.position):
             return InterceptingState
         return None
 
     def execute(self, context: RobotContext, **kwargs: Any) -> None:
         sender: grSimSender = kwargs["sender"]
+        movement = kwargs["movement"]
         spawner: BallIdleSpawner = kwargs["spawner"]
         passing_min_distance: float = kwargs.get("passing_min_distance", 3000)
         
+        # Get first teammate position (for two-robot passing)
+        if not context.teammates:
+            return
+        
+        passer_pos = list(context.teammates.values())[0].position
+        
         target_pos = calculate_receiver_position(
-            context.other_pos,
-            context.my_pos,
+            passer_pos,
+            context.my_state.position,
             passing_min_distance,
             spawner.field_x_min,
             spawner.field_x_max,
@@ -261,8 +323,8 @@ class PositioningState(State[RobotContext]):
             spawner.field_y_max,
         )
         
-        vx, vy = context.my_movement.go_to(context.my_pos, target_pos)
-        w = context.my_movement.face_towards(context.my_pos, context.other_pos)
+        vx, vy = movement.go_to(context.my_state.position, target_pos)
+        w = movement.face_towards(context.my_state.position, passer_pos)
         
         sender.send_command(
             RobotCommand(robot_id=context.robot_id, vx=vx, vy=vy, w=w, kick=0, dribble=0)
@@ -273,22 +335,23 @@ class InterceptingState(State[RobotContext]):
     """Intercept incoming ball."""
 
     def handle_transition(self, context: RobotContext) -> Optional[Type[State[RobotContext]]]:
-        if not should_intercept(context.ball_pos, context.ball_velocity, context.my_pos):
+        if not should_intercept(context.ball.position, context.ball.velocity, context.my_state.position):
             return PositioningState
         return None
 
     def execute(self, context: RobotContext, **kwargs: Any) -> None:
         sender: grSimSender = kwargs["sender"]
+        movement = kwargs["movement"]
         
-        interception_point = calculate_interception_point(context.ball_pos, context.ball_velocity)
+        interception_point = calculate_interception_point(context.ball.position, context.ball.velocity)
         
-        vx, vy = context.my_movement.go_to(
-            context.my_pos,
+        vx, vy = movement.go_to(
+            context.my_state.position,
             interception_point,
             kicker_to_target=True,
-            max_speed=3000,
+            max_speed=INTERCEPT_MAX_SPEED,
         )
-        w = context.my_movement.face_towards(context.my_pos, context.ball_pos)
+        w = movement.face_towards(context.my_state.position, context.ball.position)
         
         sender.send_command(
             RobotCommand(robot_id=context.robot_id, vx=vx, vy=vy, w=w, kick=0, dribble=1)

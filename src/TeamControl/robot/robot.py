@@ -6,7 +6,7 @@ from enum import Enum
 import numpy as np
 from TeamControl.robot.Movement import RobotMovement
 from TeamControl.robot.role import Role
-from TeamControl.robot.context import RobotContext, check_possession
+from TeamControl.robot.context import RobotContext, WorldState
 from TeamControl.robot.spawn_robot import send_robot_to_grsim
 from TeamControl.network.ssl_sockets import grSimSender
 from TeamControl.utils.state_machine import StateMachine
@@ -84,32 +84,20 @@ class Robot(Generic[R]):
 
     def execute_behavior(
         self,
+        world_state: WorldState,
         sender: grSimSender,
-        other_pos: np.ndarray,
-        ball_pos: np.ndarray,
-        ball_velocity: np.ndarray,
         **kwargs,
     ):
         """
         Execute the robot's current phase behavior.
 
         Args:
+            world_state: WorldState instance containing current world state
             sender: grSim command sender
-            other_pos: Position of other robot(s)
-            ball_pos: Ball position
-            ball_velocity: Ball velocity
-            **kwargs: Additional parameters needed by state machines
+            **kwargs: Additional parameters needed by state machines (e.g., spawner, passing_min_distance)
         """
-        # Build context for execution
-        context = RobotContext(
-            robot_id=self.robot_id,
-            my_pos=self.position,
-            my_movement=self.movement,
-            other_pos=other_pos,
-            ball_pos=ball_pos,
-            ball_velocity=ball_velocity,
-            has_possession=check_possession(ball_pos, self.position),
-        )
+        # Build context for this robot from world state
+        context = world_state.get_robot_context(self.robot_id, self.is_yellow)
 
         # Execute current phase's state machine
-        self._phase_machine.execute(context, sender=sender, **kwargs)
+        self._phase_machine.execute(context, sender=sender, movement=self.movement, **kwargs)
