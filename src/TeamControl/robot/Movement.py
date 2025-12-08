@@ -1,5 +1,7 @@
 import math
 import time
+
+import numpy as np
 from TeamControl.world.transform_cords import world2robot
 
 
@@ -81,8 +83,8 @@ class RobotMovement:
 
     def go_to(
         self,
-        robot_pos: tuple[float, float, float],
-        target: tuple[float, float],
+        robot_pos: tuple[float, float, float] | np.ndarray,
+        target: tuple[float, float] | np.ndarray,
         kicker_to_target: bool = False,
         max_speed: float = 5000,  # mm/s
         max_acceleration: float = 1700,  # mm/s^2
@@ -145,8 +147,8 @@ class RobotMovement:
 
     def face_towards(
         self,
-        robot_pos: tuple[float, float, float],
-        target: tuple[float, float],
+        robot_pos: tuple[float, float, float] | np.ndarray,
+        target: tuple[float, float] | np.ndarray,
         max_angular_speed: float = 4.0,  # radians/s
         max_angular_acceleration: float = 5.0,  # rad/s^2
         angular_proportional_gain: float = 0.5,
@@ -191,6 +193,7 @@ class RobotMovement:
         w_cmd = w_cmd if theta_error > 0 else -w_cmd
 
         return w_cmd
+
     @classmethod
     def moveagent(
         cls,
@@ -219,9 +222,10 @@ class RobotMovement:
             return 0.0, 0.0
         # Convert target from world coordinates to robot coordinates
         target_robot_frame = world2robot(robot_pos, target)
+        assert target_robot_frame is not None
         # Distance to target
         dx, dy = target_robot_frame
-        distance = math.sqrt(dx ** 2 + dy ** 2)
+        distance = math.sqrt(dx**2 + dy**2)
         # Normalize direction and scale by velocity
         vx, vy = 0.0, 0.0
         if distance > 300:
