@@ -1,32 +1,48 @@
-"""Robot class - encapsulates a single robot with its state machine and behaviors."""
+"""Robot class - encapsulates a single robot with its role and phase-based behavior."""
 
+import logging
+from typing import Generic, TypeVar
+from enum import Enum
 import numpy as np
 from TeamControl.robot.Movement import RobotMovement
-from TeamControl.robot.robot_state_machine import RobotStateMachine, RobotContext, check_possession
+from TeamControl.robot.role import Role
+from TeamControl.robot.context import RobotContext, check_possession
 from TeamControl.robot.spawn_robot import send_robot_to_grsim
 from TeamControl.network.ssl_sockets import grSimSender
+from TeamControl.utils.state_machine import StateMachine
+
+R = TypeVar("R", bound=Role)
+
+logger = logging.getLogger(__name__)
 
 
-class Robot:
-    """A robot with autonomous behavior based on roles and state machines."""
+class Robot(Generic[R]):
+    """
+    A robot with autonomous behavior based on roles and phases.
+    
+    Generic over role type R for type safety (e.g., Robot[Attacker], Robot[Goalkeeper]).
+    """
 
-    def __init__(self, robot_id: int, is_yellow: bool, initial_role: str = "receiver"):
+    def __init__(self, robot_id: int, is_yellow: bool, role: R):
         """
-        Initialize a robot.
+        Initialize a robot with a strategic role.
 
         Args:
             robot_id: Robot ID (0-15)
             is_yellow: True if yellow team, False if blue team
-            initial_role: Starting role ("passer" or "receiver")
+            role: Role instance defining strategic behavior
         """
         self.robot_id = robot_id
         self.is_yellow = is_yellow
         self.movement = RobotMovement()
-        self.state_machine = RobotStateMachine(initial_role)
+        self.role = role
 
         # Current state
         self.position: np.ndarray = np.array([0.0, 0.0, 0.0], dtype=np.float32)
-        self.role: str = initial_role
+        self.current_phase: Enum = role.get_initial_phase()
+        self._phase_machine: StateMachine[RobotContext] = role.create_phase_machine(
+            self.current_phase
+        )
 
     def spawn(self, x: float, y: float, orientation: float = 0.0):
         """
@@ -45,66 +61,55 @@ class Robot:
         """Update robot's current position from world model."""
         self.position = position
 
-    def update_state(
-        self,
-        role: str,
-        other_robot_pos: np.ndarray,
-        ball_pos: np.ndarray,
-        ball_velocity: np.ndarray,
-    ):
+    def switch_phase(self, new_phase: Enum):
         """
-        Update robot's state machine based on world state.
+        Switch to a new tactical phase.
 
         Args:
-            role: Current role ("passer" or "receiver")
-            other_robot_pos: Position of the other robot
-            ball_pos: Ball position
-            ball_velocity: Ball velocity
+            new_phase: Phase enum value from the role's Phase enum
         """
-        self.role = role
-        self.state_machine.update(
-            robot_id=self.robot_id,
-            my_role=role,
-            my_pos=self.position,
-            my_movement=self.movement,
-            other_pos=other_robot_pos,
-            ball_pos=ball_pos,
-            ball_velocity=ball_velocity,
-        )
+        if new_phase != self.current_phase:
+            old_phase = self.current_phase
+            self.current_phase = new_phase
+            self._phase_machine = self.role.create_phase_machine(new_phase)
+            logger.info(
+                f"R{self.robot_id}[{self.role.__class__.__name__}] "
+                f"PHASE: {old_phase.name} -> {new_phase.name}"
+            )
+    
+    @property
+    def current_state_name(self) -> str:
+        """Get the name of the current state in the active phase machine."""
+        return self._phase_machine.get_current_state().__class__.__name__
 
-    def execute_behavior(self, sender: grSimSender, **kwargs):
+    def execute_behavior(
+        self,
+        sender: grSimSender,
+        other_pos: np.ndarray,
+        ball_pos: np.ndarray,
+        ball_velocity: np.ndarray,
+        **kwargs,
+    ):
         """
-        Execute the robot's current state behavior.
+        Execute the robot's current phase behavior.
 
         Args:
             sender: grSim command sender
-            **kwargs: Additional parameters needed by states (e.g., spawner, passing_min_distance)
+            other_pos: Position of other robot(s)
+            ball_pos: Ball position
+            ball_velocity: Ball velocity
+            **kwargs: Additional parameters needed by state machines
         """
         # Build context for execution
         context = RobotContext(
             robot_id=self.robot_id,
-            my_role=self.role,
             my_pos=self.position,
             my_movement=self.movement,
-            other_pos=kwargs.get("other_pos", np.array([0.0, 0.0, 0.0])),
-            ball_pos=kwargs.get("ball_pos", np.array([0.0, 0.0])),
-            ball_velocity=kwargs.get("ball_velocity", np.array([0.0, 0.0])),
-            has_possession=check_possession(
-                kwargs.get("ball_pos", np.array([0.0, 0.0])), self.position
-            ),
+            other_pos=other_pos,
+            ball_pos=ball_pos,
+            ball_velocity=ball_velocity,
+            has_possession=check_possession(ball_pos, self.position),
         )
 
-        self.state_machine.execute(context, sender=sender, **kwargs)
-
-    def has_ball(self, ball_pos: np.ndarray, threshold: float = 120) -> bool:
-        """
-        Check if this robot has possession of the ball.
-
-        Args:
-            ball_pos: Ball position
-            threshold: Distance threshold for possession (mm)
-
-        Returns:
-            True if robot has possession
-        """
-        return check_possession(ball_pos, self.position, threshold)
+        # Execute current phase's state machine
+        self._phase_machine.execute(context, sender=sender, **kwargs)
