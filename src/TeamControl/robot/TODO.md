@@ -1,0 +1,3 @@
+- Consts (like in ball_handling.py), maybe good, maybe ->configuration?
+- Passing behavior isn't good. Especially the catching. Is the intercepting working?
+- 

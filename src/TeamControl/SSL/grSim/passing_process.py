@@ -8,10 +8,12 @@ from TeamControl.world.model import WorldModel
 from TeamControl.robot.robot import Robot
 from TeamControl.robot.roles import Passer
 from TeamControl.robot.context import WorldState, POSSESSION_THRESHOLD
-from TeamControl.robot import enable_logging, Colors
+from TeamControl.robot import enable_logging, AnsiColors
 
 
-def check_possession(ball_pos: np.ndarray, robot_pos: np.ndarray, threshold: float = POSSESSION_THRESHOLD) -> bool:
+def check_possession(
+    ball_pos: np.ndarray, robot_pos: np.ndarray, threshold: float = POSSESSION_THRESHOLD
+) -> bool:
     """Check if robot has possession of the ball based on distance threshold."""
     dist = float(np.linalg.norm(ball_pos - robot_pos[:2]))
     return dist < threshold
@@ -92,13 +94,13 @@ def determine_ball_responsibility(
 def passing_process(wm: WorldModel):
     # Configure robot logging
     enable_logging()
-    
+
     SIM_IP = "127.0.0.1"
     CMD_LISTEN_PORT = 20011
     TIME_LIMIT = 120
 
     sender = grSimSender(ip=SIM_IP, port=CMD_LISTEN_PORT, is_yellow=True)
-    
+
     # Create two autonomous robots with PassingDemo role
     robot0 = Robot(robot_id=0, is_yellow=True, role=Passer())
     robot1 = Robot(robot_id=1, is_yellow=True, role=Passer())
@@ -122,7 +124,7 @@ def passing_process(wm: WorldModel):
     time.sleep(0.1)
     robot1.spawn(x=1500, y=1500, orientation=0)
     time.sleep(0.1)
-    
+
     # Spawn ball
     ball_x = random.uniform(1400, 1500)
     ball_y = random.uniform(-100, 100)
@@ -156,7 +158,7 @@ def passing_process(wm: WorldModel):
         # Get current ball and robot positions
         ball_pos = world_state.ball.position
         ball_velocity = world_state.ball.velocity
-        
+
         passer_id = determine_ball_responsibility(
             robot0.position, robot1.position, ball_pos, ball_velocity
         )
@@ -194,7 +196,7 @@ def passing_process(wm: WorldModel):
         # ---- PASS COUNTING ----
         has_robot0 = check_possession(ball_pos, robot0.position)
         has_robot1 = check_possession(ball_pos, robot1.position)
-        
+
         has_blue = False
         if blue_robot_state:
             has_blue = check_possession(ball_pos, blue_robot_state.position)
@@ -211,7 +213,9 @@ def passing_process(wm: WorldModel):
             and last_possessor != current_possessor
         ):
             pass_count += 1
-            print(f"{Colors.BOLD_GREEN}Pass completed! Total passes: {pass_count}{Colors.RESET}")
+            print(
+                f"{AnsiColors.BOLD_GREEN}Pass completed! Total passes: {pass_count}{AnsiColors.RESET}"
+            )
 
         if current_possessor is not None:
             last_possessor = current_possessor
