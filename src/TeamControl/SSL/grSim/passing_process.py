@@ -113,7 +113,7 @@ def passing_process(wm: WorldModel):
     pass_count = 0
     last_possessor = None
     blue_possession_start = None
-    BLUE_POSSESSION_DURATION = 0.5
+    BLUE_POSSESSION_DURATION = 0.3
 
     PASSING_MIN_DISTANCE = 3000
 
@@ -221,17 +221,22 @@ def passing_process(wm: WorldModel):
             last_possessor = current_possessor
 
         # ---- STOPPING CONDITIONS ----
+        
         if has_blue:
             if blue_possession_start is None:
                 blue_possession_start = time.time()
             elif time.time() - blue_possession_start >= BLUE_POSSESSION_DURATION:
                 print("Blue robot intercepted the ball!")
-                break
+                #break
+                pass
+              
         else:
             blue_possession_start = None
 
         if not spawner.is_ball_in_field(ball_pos):
-            print("Ball is out of field!")
-            break
+            #print("Ball is out of field!")
+            #break
+            pass
+          
 
     print(f"Final result: {pass_count} passes in {time.time() - start_time:.1f} seconds")

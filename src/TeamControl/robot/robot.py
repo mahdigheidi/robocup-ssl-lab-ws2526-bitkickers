@@ -72,10 +72,10 @@ class Robot(Generic[R]):
             old_phase = self.current_phase
             self.current_phase = new_phase
             self._phase_machine = self.role.create_phase_machine(new_phase)
-            logger.info(
-                f"R{self.robot_id}[{self.role.__class__.__name__}] "
-                f"PHASE: {old_phase.name} -> {new_phase.name}"
-            )
+            #logger.info(
+                #f"R{self.robot_id}[{self.role.__class__.__name__}] "
+                #f"PHASE: {old_phase.name} -> {new_phase.name}"
+            #)
     
     @property
     def current_state_name(self) -> str:

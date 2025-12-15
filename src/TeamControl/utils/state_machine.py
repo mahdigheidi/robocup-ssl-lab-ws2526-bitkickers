@@ -135,10 +135,12 @@ class StateMachine(Generic[TContext]):
             
             # Log state transition with robot ID if available
             if hasattr(context, 'robot_id'):
-                logger.debug(
-                    f"    R{context.robot_id} state: "
-                    f"{old_state.__class__.__name__} -> {self._current_state.__class__.__name__}"
-                )
+                pass
+                #logger.debug(
+                    #f"    R{context.robot_id} state: "
+                    #f"{old_state.__class__.__name__} -> {self._current_state.__class__.__name__}"
+                #)
+                
 
     def force_transition(self, state_type: Type[State[TContext]], context: TContext) -> None:
         """
