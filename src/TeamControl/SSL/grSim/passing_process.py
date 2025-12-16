@@ -227,16 +227,17 @@ def passing_process(wm: WorldModel):
                 blue_possession_start = time.time()
             elif time.time() - blue_possession_start >= BLUE_POSSESSION_DURATION:
                 print("Blue robot intercepted the ball!")
-                #break
-                pass
+                break
+                #pass
+       
               
         else:
             blue_possession_start = None
 
         if not spawner.is_ball_in_field(ball_pos):
-            #print("Ball is out of field!")
-            #break
-            pass
+            print("Ball is out of field!")
+            break
+     
           
 
     print(f"Final result: {pass_count} passes in {time.time() - start_time:.1f} seconds")

@@ -228,7 +228,7 @@ def interceptor_process(wm):
                     (kick_angle - rtheta + math.pi) % (2 * math.pi)
                 ) - math.pi
 
-                if abs(angle_error) > 0.2:
+                if abs(angle_error) > 0.5:
                     cmd = RobotCommand(
                         0, 0, 0, 6.0 * angle_error, dribble=1
                     )
