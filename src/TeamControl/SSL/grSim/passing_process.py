@@ -163,18 +163,31 @@ def passing_process(wm: WorldModel):
             robot0.position, robot1.position, ball_pos, ball_velocity
         )
 
+        ball_speed = np.linalg.norm(ball_velocity)
+        
+        # Check if ball is moving toward each robot
+        def ball_moving_toward(robot_pos: np.ndarray) -> bool:
+            if ball_speed < BALL_SLOW_THRESHOLD:
+                return False
+            ball_dir = ball_velocity / ball_speed
+            to_robot = robot_pos[:2] - ball_pos
+            dist = np.linalg.norm(to_robot)
+            if dist < 1:
+                return False
+            return np.dot(ball_dir, to_robot / dist) > 0.3
+        
         # Switch phases based on ball responsibility
         if passer_id == 0:
             # Robot 0 is responsible for the ball
             if check_possession(ball_pos, robot0.position):
                 robot0.switch_phase(Passer.Phase.PASSING)
                 robot1.switch_phase(Passer.Phase.RECEIVING)
-            elif np.linalg.norm(ball_velocity) > BALL_SLOW_THRESHOLD:
-                # Ball is moving fast - robot 0 should receive (ball coming to them)
+            elif ball_moving_toward(robot0.position):
+                # Ball is moving toward robot 0 - receive it
                 robot0.switch_phase(Passer.Phase.RECEIVING)
                 robot1.switch_phase(Passer.Phase.RECEIVING)
             else:
-                # Ball is slow/stationary - robot 0 should chase
+                # Ball is slow OR glanced past - chase it
                 robot0.switch_phase(Passer.Phase.CHASING)
                 robot1.switch_phase(Passer.Phase.RECEIVING)
         else:
@@ -182,12 +195,12 @@ def passing_process(wm: WorldModel):
             if check_possession(ball_pos, robot1.position):
                 robot1.switch_phase(Passer.Phase.PASSING)
                 robot0.switch_phase(Passer.Phase.RECEIVING)
-            elif np.linalg.norm(ball_velocity) > BALL_SLOW_THRESHOLD:
-                # Ball is moving fast - robot 1 should receive (ball coming to them)
+            elif ball_moving_toward(robot1.position):
+                # Ball is moving toward robot 1 - receive it
                 robot1.switch_phase(Passer.Phase.RECEIVING)
                 robot0.switch_phase(Passer.Phase.RECEIVING)
             else:
-                # Ball is slow/stationary - robot 1 should chase
+                # Ball is slow OR glanced past - chase it
                 robot1.switch_phase(Passer.Phase.CHASING)
                 robot0.switch_phase(Passer.Phase.RECEIVING)
 
