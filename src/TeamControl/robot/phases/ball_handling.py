@@ -282,82 +282,114 @@ def calculate_interception_point(
     
     return interception_point
 
-# Small step size for gradual elliptical motion (mm)
-REPOSITION_STEP_SIZE = 500  # Step size per positioning update
-REPOSITION_MAX_SPEED = 3000  # mm/s - slower speed during repositioning
-INWARD_BIAS_FACTOR = 0.25  # How much to bias toward center (0 = pure tangent, 1 = mostly inward)
-IDEAL_ORBIT_RADIUS = 500  # mm - ideal distance from center (smaller = closer to center)
+# Repositioning constants
+REPOSITION_STEP_SIZE = 800  # mm - how far to move when repositioning
+REPOSITION_MAX_SPEED = 2500  # mm/s - speed during repositioning
+SHADOW_WIDTH = 300  # mm - how wide the "blocked" zone is around the passing lane
+
+
+def is_path_blocked(
+    passer_pos: np.ndarray,
+    receiver_pos: np.ndarray,
+    opponent_pos: np.ndarray,
+) -> bool:
+    """Check if opponent is blocking the passing lane between passer and receiver."""
+    # Vector from passer to receiver
+    passer_to_receiver = receiver_pos[:2] - passer_pos[:2]
+    lane_length = np.linalg.norm(passer_to_receiver)
+    
+    if lane_length < 1:
+        return False
+    
+    lane_dir = passer_to_receiver / lane_length
+    
+    # Vector from passer to opponent
+    passer_to_opponent = opponent_pos[:2] - passer_pos[:2]
+    
+    # Project opponent onto the passing lane
+    projection = np.dot(passer_to_opponent, lane_dir)
+    
+    # Opponent must be between passer and receiver (with some margin)
+    if projection < 200 or projection > lane_length - 200:
+        return False
+    
+    # Calculate perpendicular distance from opponent to the lane
+    closest_point_on_lane = passer_pos[:2] + lane_dir * projection
+    perp_distance = np.linalg.norm(opponent_pos[:2] - closest_point_on_lane)
+    
+    return perp_distance < SHADOW_WIDTH
 
 
 def calculate_receiver_position(
     receiver_pos: np.ndarray,
     passer_pos: np.ndarray,
-    min_distance: float,
+    opponent_state: Optional["EntityState"],
     field_x_min: float,
     field_x_max: float,
     field_y_min: float,
     field_y_max: float,
     margin: float = RECEIVER_FIELD_MARGIN,
-) -> np.ndarray:
-    """Calculate a new position by moving counter-clockwise around the field center.
+) -> Optional[np.ndarray]:
+    """Calculate a new position to get clear of opponent's shadow.
     
-    This creates an elliptical motion pattern over time.
-    Robots far from center have a bias toward moving inward.
-    Hard constraint: must stay inside field.
-    Soft constraint: should maintain distance from passer.
+    Only moves when path is actually blocked. Moves toward the side with
+    more open field space.
+    Returns None if already in a good position (no movement needed).
     """
-    # Field center
-    field_center = np.array([
-        (field_x_min + field_x_max) / 2,
-        (field_y_min + field_y_max) / 2
-    ])
+    # If no opponent, stay put
+    if opponent_state is None:
+        return None
     
-    # Vector from center to receiver
-    to_receiver = receiver_pos[:2] - field_center
-    dist_from_center = np.linalg.norm(to_receiver)
+    opponent_pos = opponent_state.position
     
-    if dist_from_center < 1:
-        # At center, move in a default direction
-        tangent = np.array([1.0, 0.0])
-        inward = np.array([0.0, 0.0])
+    # Only move if path is actually blocked - otherwise stay completely still
+    if not is_path_blocked(passer_pos, receiver_pos, opponent_pos):
+        return None
+    
+    # Path is blocked - need to move perpendicular to clear the lane
+    passer_to_receiver = receiver_pos[:2] - passer_pos[:2]
+    lane_length = np.linalg.norm(passer_to_receiver)
+    
+    if lane_length < 1:
+        return None
+    
+    lane_dir = passer_to_receiver / lane_length
+    
+    # Perpendicular directions (left and right of the lane)
+    perp_left = np.array([-lane_dir[1], lane_dir[0]])
+    perp_right = np.array([lane_dir[1], -lane_dir[0]])
+    
+    # Calculate how much space is available in each direction
+    # (distance to field boundary)
+    left_candidate = receiver_pos[:2] + perp_left * REPOSITION_STEP_SIZE
+    right_candidate = receiver_pos[:2] + perp_right * REPOSITION_STEP_SIZE
+    
+    # Check how far each candidate is from nearest boundary
+    def space_available(pos: np.ndarray) -> float:
+        """Return minimum distance to any field boundary."""
+        return min(
+            pos[0] - field_x_min,
+            field_x_max - pos[0],
+            pos[1] - field_y_min,
+            field_y_max - pos[1],
+        )
+    
+    left_space = space_available(left_candidate)
+    right_space = space_available(right_candidate)
+    
+    # Choose direction with more open space
+    if left_space > right_space:
+        candidate = left_candidate
     else:
-        # Tangent direction (perpendicular to radius, counter-clockwise)
-        radial = to_receiver / dist_from_center
-        tangent = np.array([-radial[1], radial[0]])
-        # Inward direction (toward center)
-        inward = -radial
+        candidate = right_candidate
     
-    # Proportional inward bias: more inward when far from ideal orbit
-    # If robot is further than ideal, add inward component
-    distance_error = dist_from_center - IDEAL_ORBIT_RADIUS
-    inward_weight = max(0, distance_error / IDEAL_ORBIT_RADIUS) * INWARD_BIAS_FACTOR
-    
-    # Blend tangent and inward movement
-    # tangent_weight + inward_weight should give a reasonable direction
-    direction = tangent + inward * inward_weight
-    direction_norm = np.linalg.norm(direction)
-    if direction_norm > 0:
-        direction = direction / direction_norm
-    
-    # Try this blended direction first, then pure tangent directions
-    for dir_option in [direction, tangent]:
-        candidate = receiver_pos[:2] + dir_option * REPOSITION_STEP_SIZE
-        
-        # Hard constraint: must be inside field
-        if not (field_x_min + margin <= candidate[0] <= field_x_max - margin and
-                field_y_min + margin <= candidate[1] <= field_y_max - margin):
-            continue
-        
-        # Soft constraint: not too close to passer
-        dist_to_passer = np.linalg.norm(candidate - passer_pos[:2])
-        if dist_to_passer >= min_distance * 0.7:
-            return candidate
-    
-    # Fallback: clamp current position to field
-    return np.array([
-        max(field_x_min + margin, min(field_x_max - margin, receiver_pos[0])),
-        max(field_y_min + margin, min(field_y_max - margin, receiver_pos[1])),
+    # Clamp to field boundaries
+    candidate = np.array([
+        max(field_x_min + margin, min(field_x_max - margin, candidate[0])),
+        max(field_y_min + margin, min(field_y_max - margin, candidate[1])),
     ])
+    
+    return candidate
 
 
 class PositioningState(State[RobotContext]):
@@ -372,7 +404,6 @@ class PositioningState(State[RobotContext]):
         sender: grSimSender = kwargs["sender"]
         movement = kwargs["movement"]
         spawner: BallIdleSpawner = kwargs["spawner"]
-        passing_min_distance: float = kwargs.get("passing_min_distance", 3000)
         
         # Get first teammate position (for two-robot passing)
         if not context.teammates:
@@ -405,18 +436,29 @@ class PositioningState(State[RobotContext]):
                     )
                     return
         
-        # Default: move counter-clockwise around field center
+        # Get opponent state (first opponent if exists)
+        opponent_state = None
+        if context.opponents:
+            opponent_state = list(context.opponents.values())[0]
+        
+        # Check if we need to reposition to avoid opponent's shadow
         target_pos = calculate_receiver_position(
             context.my_state.position,
             passer_pos,
-            passing_min_distance,
+            opponent_state,
             spawner.field_x_min,
             spawner.field_x_max,
             spawner.field_y_min,
             spawner.field_y_max,
         )
         
-        vx, vy = movement.go_to(context.my_state.position, target_pos, max_speed=REPOSITION_MAX_SPEED)
+        if target_pos is not None:
+            # Need to move to get clear
+            vx, vy = movement.go_to(context.my_state.position, target_pos, max_speed=REPOSITION_MAX_SPEED)
+        else:
+            # Already in good position, stay still
+            vx, vy = 0, 0
+        
         w = movement.face_towards(context.my_state.position, passer_pos)
         
         sender.send_command(

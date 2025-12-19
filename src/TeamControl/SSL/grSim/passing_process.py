@@ -234,13 +234,13 @@ def passing_process(wm: WorldModel):
 
         # ---- STOPPING CONDITIONS ----
         
-        if has_blue:
-            if blue_possession_start is None:
-                blue_possession_start = time.time()
-            elif time.time() - blue_possession_start >= BLUE_POSSESSION_DURATION:
-                print("Blue robot intercepted the ball!")
-                break
-                #pass
+        # if has_blue:
+        #     if blue_possession_start is None:
+        #         blue_possession_start = time.time()
+        #     elif time.time() - blue_possession_start >= BLUE_POSSESSION_DURATION:
+        #         print("Blue robot intercepted the ball!")
+        #         break
+        #         #pass
        
               
         else:
