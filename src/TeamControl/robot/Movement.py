@@ -1,5 +1,7 @@
 import math
 import time
+
+import numpy as np
 from TeamControl.world.transform_cords import world2robot
 
 
@@ -81,8 +83,8 @@ class RobotMovement:
 
     def go_to(
         self,
-        robot_pos: tuple[float, float, float],
-        target: tuple[float, float],
+        robot_pos: tuple[float, float, float] | np.ndarray,
+        target: tuple[float, float] | np.ndarray,
         kicker_to_target: bool = False,
         max_speed: float = 5000,  # mm/s
         max_acceleration: float = 1700,  # mm/s^2
@@ -113,7 +115,9 @@ class RobotMovement:
         x, y, theta = robot_pos
 
         if kicker_to_target:
-            x += kicker_offset
+            # Apply kicker offset in the robot's facing direction
+            x += kicker_offset * math.cos(theta)
+            y += kicker_offset * math.sin(theta)
 
         # Convert target from world coordinates to robot coordinates
         dx, dy = world2robot((x, y, theta), target)  # type: ignore
@@ -145,8 +149,8 @@ class RobotMovement:
 
     def face_towards(
         self,
-        robot_pos: tuple[float, float, float],
-        target: tuple[float, float],
+        robot_pos: tuple[float, float, float] | np.ndarray,
+        target: tuple[float, float] | np.ndarray,
         max_angular_speed: float = 4.0,  # radians/s
         max_angular_acceleration: float = 5.0,  # rad/s^2
         angular_proportional_gain: float = 0.5,
@@ -191,47 +195,3 @@ class RobotMovement:
         w_cmd = w_cmd if theta_error > 0 else -w_cmd
 
         return w_cmd
-    @classmethod
-    def moveagent(
-        cls,
-        robot_pos: tuple[float, float, float],
-        target: tuple[float, float],
-        velocity: float = 1.0,
-    ) -> tuple[float, float]:
-        """
-        Calculate the velocity (vx, vy) for the robot to move towards a target
-        point
-        and stop when is very close to it.
-        Args:
-        robot_pos (tuple[float, float, float]): Robot's current position
-        (x, y, theta) in world coordinates.
-        target (tuple[float, float]): Target position in world
-        coordinates.
-        velocity (float, optional): Constant velocity to move towards the
-        target. Defaults to 1.0.
-        stop_threshold (float, optional): Distance threshold to stop near
-        the target. Defaults to 150.
-        Returns:
-        tuple[float, float]: Velocity components (vx, vy) in robot
-        coordinates.
-        """
-        if robot_pos is None or target is None:
-            return 0.0, 0.0
-        # Convert target from world coordinates to robot coordinates
-        target_robot_frame = world2robot(robot_pos, target)
-        # Distance to target
-        dx, dy = target_robot_frame
-        distance = math.sqrt(dx ** 2 + dy ** 2)
-        # Normalize direction and scale by velocity
-        vx, vy = 0.0, 0.0
-        if distance > 300:
-            vx = (dx / distance) * velocity
-            vy = (dy / distance) * velocity
-        elif 150 < distance <= 300:
-            vx = (dx / distance) * (velocity / 3)
-            vy = (dy / distance) * (velocity / 3)
-        elif 10 < distance <= 150:
-            vx = (dx / distance) * (velocity / 7)
-            vy = (dy / distance) * (velocity / 7)
-
-        return vx, vy

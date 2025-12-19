@@ -52,7 +52,7 @@ class GrSimRobotCommands:
         """
         self.isYellow = new_is_Yellow
     
-    def _robot_command_wrapper(self, robot_id:int, vx: float,vy: float,w: float, k:bool, d:bool) -> object:
+    def _robot_command_wrapper(self, robot_id:int, vx: float,vy: float,w: float, k:int, d:bool) -> object:
         """
         Wrap raw command parameters into a grSim_Robot_Command protobuf.
 
@@ -61,7 +61,7 @@ class GrSimRobotCommands:
             vx (float): Velocity in X direction.
             vy (float): Velocity in Y direction.
             w (float): Angular velocity.
-            k (bool): Kick flag.
+            k (int): Kicking velocity (0 - 10)
             d (bool): Dribble flag.
 
         Returns:
@@ -69,16 +69,16 @@ class GrSimRobotCommands:
         """
         robot_id = int(robot_id)
         vx, vy, w = float(vx), float(vy), float(w)
-        k, d = bool(k), bool(d)
+        k, d = int(k), bool(d)
 
         grSim_robot_command =  grSim_Commands_pb2.grSim_Robot_Command(
-            id=robot_id, 
-            kickspeedx=self.kick_speed_x if k else 0.0, 
-            kickspeedz=self.kick_speed_z if k else 0.0, 
-            veltangent=vx, 
-            velnormal=vy, 
-            velangular=w, 
-            spinner=d, 
+            id=robot_id,
+            kickspeedx=k,
+            kickspeedz=self.kick_speed_z if k else 0.0,
+            veltangent=vx,
+            velnormal=vy,
+            velangular=w,
+            spinner=d,
             wheelsspeed=self.wheel_speed
             )
         return grSim_robot_command
