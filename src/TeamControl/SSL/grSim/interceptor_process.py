@@ -244,7 +244,7 @@ def interceptor_process(wm):
             tx, ty = avoid_collision(rx, ry, tx, ty, y0, y1)
             tx, ty = safe_target(tx, ty, rx, ry)
 
-            vx, vy = movement.go_to((rx, ry, rtheta), (tx, ty))
+            vx, vy = movement.go_to((rx, ry, rtheta), (tx, ty), max_acceleration=200)
             w = movement.face_towards((rx, ry, rtheta), (ball_x, ball_y))
             cmd = RobotCommand(0, vx, vy, w)
 

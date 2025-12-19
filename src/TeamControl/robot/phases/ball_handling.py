@@ -26,13 +26,15 @@ INTERCEPT_MAX_SPEED = 3000
 
 # Passing alignment
 ALIGNMENT_THRESHOLD = 0.1  # radians (~5.7 degrees)
-KICK_POWER = 5  # grSim kick power units
+KICK_POWER_MIN = 5  # grSim kick power units (for close range)
+KICK_POWER_MAX = 9  # grSim kick power units (for long range)
+KICK_DISTANCE_MIN = 2000  # mm - distance for minimum kick power
+KICK_DISTANCE_MAX = 8000  # mm - distance for maximum kick power
 
 # Receiving behavior
 INTERCEPT_MIN_BALL_SPEED = 500  # mm/s - below this, don't intercept
 INTERCEPT_THRESHOLD_SPEED = 800  # mm/s - speed at which interception becomes aggressive
 INTERCEPT_DOT_THRESHOLD = 0.5  # Dot product threshold for "moving towards robot"
-INTERCEPT_SHIFT_FACTOR = 0.8  # How far back along trajectory to position
 
 # Field margins
 RECEIVER_FIELD_MARGIN = 200  # mm from field boundaries
@@ -188,8 +190,20 @@ class KickingState(State[RobotContext]):
     def execute(self, context: RobotContext, **kwargs: Any) -> None:
         sender: grSimSender = kwargs["sender"]
         
+        # Calculate kick power based on distance to target
+        if context.teammates:
+            target_pos = list(context.teammates.values())[0].position
+            dist = distance(context.my_state.position, target_pos)
+            
+            # Linear interpolation between min and max power
+            t = (dist - KICK_DISTANCE_MIN) / (KICK_DISTANCE_MAX - KICK_DISTANCE_MIN)
+            t = max(0.0, min(1.0, t))  # Clamp to [0, 1]
+            kick_power = KICK_POWER_MIN + t * (KICK_POWER_MAX - KICK_POWER_MIN)
+        else:
+            kick_power = KICK_POWER_MIN
+        
         sender.send_command(
-            RobotCommand(robot_id=context.robot_id, vx=0, vy=0, w=0, kick=KICK_POWER, dribble=0)
+            RobotCommand(robot_id=context.robot_id, vx=0, vy=0, w=0, kick=kick_power, dribble=0)
         )
 
 
@@ -236,23 +250,48 @@ def should_intercept(ball_pos: np.ndarray, ball_velocity: np.ndarray, robot_pos:
     return dot > INTERCEPT_DOT_THRESHOLD
 
 
-def calculate_interception_point(ball_pos: np.ndarray, ball_velocity: np.ndarray) -> np.ndarray:
-    """Calculate where to position to intercept ball."""
+def calculate_interception_point(
+    ball_pos: np.ndarray, ball_velocity: np.ndarray, robot_pos: np.ndarray
+) -> np.ndarray:
+    """Calculate closest point on ball trajectory for interception.
+    
+    Projects the robot's position onto the ball's trajectory line to find
+    the optimal interception point (perpendicular to the trajectory).
+    """
     ball_speed = np.linalg.norm(ball_velocity)
     if ball_speed == 0:
         return ball_pos
     
-    # Project backward along trajectory
+    # Direction of ball movement (normalized)
     ball_direction = ball_velocity / ball_speed
-    shift_distance = INTERCEPT_SHIFT_FACTOR * ball_speed
-    interception_point = ball_pos - ball_direction * shift_distance
+    
+    # Vector from ball to robot
+    ball_to_robot = robot_pos[:2] - ball_pos
+    
+    # Project robot position onto the ball's trajectory line
+    # This gives the distance along the trajectory to the closest point
+    projection_distance = np.dot(ball_to_robot, ball_direction)
+    
+    # Only intercept points ahead of the ball (positive projection)
+    if projection_distance < 0:
+        # Ball is moving away from robot, just go to current ball position
+        return ball_pos
+    
+    # Calculate the closest point on the trajectory
+    interception_point = ball_pos + ball_direction * projection_distance
     
     return interception_point
 
+# Small step size for gradual elliptical motion (mm)
+REPOSITION_STEP_SIZE = 500  # Step size per positioning update
+REPOSITION_MAX_SPEED = 3000  # mm/s - slower speed during repositioning
+INWARD_BIAS_FACTOR = 0.25  # How much to bias toward center (0 = pure tangent, 1 = mostly inward)
+IDEAL_ORBIT_RADIUS = 500  # mm - ideal distance from center (smaller = closer to center)
+
 
 def calculate_receiver_position(
-    passer_pos: np.ndarray,
     receiver_pos: np.ndarray,
+    passer_pos: np.ndarray,
     min_distance: float,
     field_x_min: float,
     field_x_max: float,
@@ -260,37 +299,65 @@ def calculate_receiver_position(
     field_y_max: float,
     margin: float = RECEIVER_FIELD_MARGIN,
 ) -> np.ndarray:
-    """Calculate position for receiver at minimum distance from passer."""
-    delta = receiver_pos[:2] - passer_pos[:2]
-    dist = np.linalg.norm(delta)
-
-    if dist == 0 or dist >= min_distance:
-        return receiver_pos[:2]
-
-    # Calculate target position at min_distance
-    target = passer_pos[:2] + (delta / dist) * min_distance
-
-    # Clamp to field boundaries
-    clamped = np.array(
-        [
-            max(field_x_min + margin, min(field_x_max - margin, target[0])),
-            max(field_y_min + margin, min(field_y_max - margin, target[1])),
-        ]
-    )
-
-    # If clamping brought us closer than min_distance, project back
-    clamped_delta = clamped - passer_pos[:2]
-    clamped_dist = np.linalg.norm(clamped_delta)
-
-    if clamped_dist < min_distance:
-        if clamped_dist > 0:
-            target = passer_pos[:2] + (clamped_delta / clamped_dist) * min_distance
-        else:
-            target = clamped
+    """Calculate a new position by moving counter-clockwise around the field center.
+    
+    This creates an elliptical motion pattern over time.
+    Robots far from center have a bias toward moving inward.
+    Hard constraint: must stay inside field.
+    Soft constraint: should maintain distance from passer.
+    """
+    # Field center
+    field_center = np.array([
+        (field_x_min + field_x_max) / 2,
+        (field_y_min + field_y_max) / 2
+    ])
+    
+    # Vector from center to receiver
+    to_receiver = receiver_pos[:2] - field_center
+    dist_from_center = np.linalg.norm(to_receiver)
+    
+    if dist_from_center < 1:
+        # At center, move in a default direction
+        tangent = np.array([1.0, 0.0])
+        inward = np.array([0.0, 0.0])
     else:
-        target = clamped
-
-    return target
+        # Tangent direction (perpendicular to radius, counter-clockwise)
+        radial = to_receiver / dist_from_center
+        tangent = np.array([-radial[1], radial[0]])
+        # Inward direction (toward center)
+        inward = -radial
+    
+    # Proportional inward bias: more inward when far from ideal orbit
+    # If robot is further than ideal, add inward component
+    distance_error = dist_from_center - IDEAL_ORBIT_RADIUS
+    inward_weight = max(0, distance_error / IDEAL_ORBIT_RADIUS) * INWARD_BIAS_FACTOR
+    
+    # Blend tangent and inward movement
+    # tangent_weight + inward_weight should give a reasonable direction
+    direction = tangent + inward * inward_weight
+    direction_norm = np.linalg.norm(direction)
+    if direction_norm > 0:
+        direction = direction / direction_norm
+    
+    # Try this blended direction first, then pure tangent directions
+    for dir_option in [direction, tangent]:
+        candidate = receiver_pos[:2] + dir_option * REPOSITION_STEP_SIZE
+        
+        # Hard constraint: must be inside field
+        if not (field_x_min + margin <= candidate[0] <= field_x_max - margin and
+                field_y_min + margin <= candidate[1] <= field_y_max - margin):
+            continue
+        
+        # Soft constraint: not too close to passer
+        dist_to_passer = np.linalg.norm(candidate - passer_pos[:2])
+        if dist_to_passer >= min_distance * 0.7:
+            return candidate
+    
+    # Fallback: clamp current position to field
+    return np.array([
+        max(field_x_min + margin, min(field_x_max - margin, receiver_pos[0])),
+        max(field_y_min + margin, min(field_y_max - margin, receiver_pos[1])),
+    ])
 
 
 class PositioningState(State[RobotContext]):
@@ -313,9 +380,35 @@ class PositioningState(State[RobotContext]):
         
         passer_pos = list(context.teammates.values())[0].position
         
+        ball_speed = np.linalg.norm(context.ball.velocity)
+        
+        # If ball is moving (even slowly), move to intercept its trajectory
+        if ball_speed > INTERCEPT_MIN_BALL_SPEED:
+            # Check if ball is moving somewhat towards us
+            ball_direction = context.ball.velocity / ball_speed
+            to_robot = context.my_state.position[:2] - context.ball.position
+            to_robot_dist = np.linalg.norm(to_robot)
+            
+            if to_robot_dist > 0:
+                to_robot_normalized = to_robot / to_robot_dist
+                dot = np.dot(ball_direction, to_robot_normalized)
+                
+                # If ball is moving towards robot (even loosely), intercept trajectory
+                if dot > 0.1:  # Lower threshold than should_intercept
+                    target_pos = calculate_interception_point(
+                        context.ball.position, context.ball.velocity, context.my_state.position
+                    )
+                    vx, vy = movement.go_to(context.my_state.position, target_pos, kicker_to_target=True)
+                    w = movement.face_towards(context.my_state.position, context.ball.position)
+                    sender.send_command(
+                        RobotCommand(robot_id=context.robot_id, vx=vx, vy=vy, w=w, kick=0, dribble=1)
+                    )
+                    return
+        
+        # Default: move counter-clockwise around field center
         target_pos = calculate_receiver_position(
-            passer_pos,
             context.my_state.position,
+            passer_pos,
             passing_min_distance,
             spawner.field_x_min,
             spawner.field_x_max,
@@ -323,7 +416,7 @@ class PositioningState(State[RobotContext]):
             spawner.field_y_max,
         )
         
-        vx, vy = movement.go_to(context.my_state.position, target_pos)
+        vx, vy = movement.go_to(context.my_state.position, target_pos, max_speed=REPOSITION_MAX_SPEED)
         w = movement.face_towards(context.my_state.position, passer_pos)
         
         sender.send_command(
@@ -335,6 +428,22 @@ class InterceptingState(State[RobotContext]):
     """Intercept incoming ball."""
 
     def handle_transition(self, context: RobotContext) -> Optional[Type[State[RobotContext]]]:
+        # Calculate distance to the interception point on the trajectory
+        interception_point = calculate_interception_point(
+            context.ball.position, context.ball.velocity, context.my_state.position
+        )
+        dist_to_interception = np.linalg.norm(interception_point - context.my_state.position[:2])
+        
+        # Also check distance to ball itself
+        dist_to_ball = np.linalg.norm(context.ball.position - context.my_state.position[:2])
+        
+        # Keep intercepting if:
+        # 1. Close to interception point, OR
+        # 2. Close to the ball itself
+        # Only exit if both are far away and ball is not coming toward us
+        if dist_to_interception < 500 or dist_to_ball < 500:
+            return None  # Stay in intercepting
+        
         if not should_intercept(context.ball.position, context.ball.velocity, context.my_state.position):
             return PositioningState
         return None
@@ -342,8 +451,18 @@ class InterceptingState(State[RobotContext]):
     def execute(self, context: RobotContext, **kwargs: Any) -> None:
         sender: grSimSender = kwargs["sender"]
         movement = kwargs["movement"]
+        spawner: BallIdleSpawner = kwargs["spawner"]
         
-        interception_point = calculate_interception_point(context.ball.position, context.ball.velocity)
+        interception_point = calculate_interception_point(
+            context.ball.position, context.ball.velocity, context.my_state.position
+        )
+        
+        # Clamp interception point to field boundaries
+        margin = RECEIVER_FIELD_MARGIN
+        interception_point = np.array([
+            max(spawner.field_x_min + margin, min(spawner.field_x_max - margin, interception_point[0])),
+            max(spawner.field_y_min + margin, min(spawner.field_y_max - margin, interception_point[1])),
+        ])
         
         vx, vy = movement.go_to(
             context.my_state.position,

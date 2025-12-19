@@ -20,3 +20,6 @@ class AnsiColors(Enum):
     RED = "\033[91m"  # Alternative option
 
     RESET = "\033[0m"
+
+    def __str__(self) -> str:
+        return self.value

@@ -115,7 +115,7 @@ def passing_process(wm: WorldModel):
     blue_possession_start = None
     BLUE_POSSESSION_DURATION = 0.3
 
-    PASSING_MIN_DISTANCE = 3000
+    PASSING_MIN_DISTANCE = 4000
 
     spawner = BallIdleSpawner(division=DIVISION)
 
@@ -165,19 +165,31 @@ def passing_process(wm: WorldModel):
 
         # Switch phases based on ball responsibility
         if passer_id == 0:
-            # Robot 0 is responsible - check if it should chase or pass
+            # Robot 0 is responsible for the ball
             if check_possession(ball_pos, robot0.position):
                 robot0.switch_phase(Passer.Phase.PASSING)
+                robot1.switch_phase(Passer.Phase.RECEIVING)
+            elif np.linalg.norm(ball_velocity) > BALL_SLOW_THRESHOLD:
+                # Ball is moving fast - robot 0 should receive (ball coming to them)
+                robot0.switch_phase(Passer.Phase.RECEIVING)
+                robot1.switch_phase(Passer.Phase.RECEIVING)
             else:
+                # Ball is slow/stationary - robot 0 should chase
                 robot0.switch_phase(Passer.Phase.CHASING)
-            robot1.switch_phase(Passer.Phase.RECEIVING)
+                robot1.switch_phase(Passer.Phase.RECEIVING)
         else:
-            # Robot 1 is responsible - check if it should chase or pass
+            # Robot 1 is responsible for the ball
             if check_possession(ball_pos, robot1.position):
                 robot1.switch_phase(Passer.Phase.PASSING)
+                robot0.switch_phase(Passer.Phase.RECEIVING)
+            elif np.linalg.norm(ball_velocity) > BALL_SLOW_THRESHOLD:
+                # Ball is moving fast - robot 1 should receive (ball coming to them)
+                robot1.switch_phase(Passer.Phase.RECEIVING)
+                robot0.switch_phase(Passer.Phase.RECEIVING)
             else:
+                # Ball is slow/stationary - robot 1 should chase
                 robot1.switch_phase(Passer.Phase.CHASING)
-            robot0.switch_phase(Passer.Phase.RECEIVING)
+                robot0.switch_phase(Passer.Phase.RECEIVING)
 
         # ---- EXECUTE ROBOT BEHAVIORS ----
         robot0.execute_behavior(
