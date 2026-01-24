@@ -3,12 +3,16 @@ requires = ["setuptools>=61.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "TeamControl"
-requires-python = ">=3.9"
+name = "team_control"
+requires-python = ">=3.11"
 dependencies = [
+    "torch",
+    "pandas",
     "numpy",
     "matplotlib",
+    "tqdm",
     "protobuf",
+    "shapely",
     "PyYAML"
 ]
 
@@ -20,14 +24,14 @@ dynamic = [
 where = ["src"]
 
 [tools.setuptools.dynamic]
-version = {attr = "TeamControl.__version__"}
+version = {attr = "BitKickers.__version__"}
 
 [project.optional-dependencies]
 pathplanning = [
     "Shapely",
     "scikit-learn",
     "networkx",
-    ]
+]
 trajectory = [
     "scikit-learn",
 ]

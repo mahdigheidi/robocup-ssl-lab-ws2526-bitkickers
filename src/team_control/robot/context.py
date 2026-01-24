@@ -1,0 +1,198 @@
+"""Robot context and world state - shared data structures for robot state machines."""
+
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
+import numpy as np
+
+if TYPE_CHECKING:
+    from team_control.world.model import WorldModel
+
+
+# =============================================================================
+# Configuration Constants
+# =============================================================================
+
+POSSESSION_THRESHOLD = 120  # mm - distance threshold for ball possession
+
+
+@dataclass(slots=True, frozen=True)
+class EntityState:
+    """Position and velocity of an entity (robot or ball).
+
+    For robots: position is [x, y, orientation], velocity is [vx, vy, vw]
+    For ball: position is [x, y], velocity is [vx, vy]
+    """
+    position: np.ndarray
+    velocity: np.ndarray
+
+    def __post_init__(self):
+        """Validate array shapes."""
+        if self.position.shape[0] not in (2, 3):
+            raise ValueError(
+                f"position must have shape (2,) or (3,), got {self.position.shape}"
+            )
+        if self.velocity.shape[0] not in (2, 3):
+            raise ValueError(
+                f"velocity must have shape (2,) or (3,), got {self.velocity.shape}"
+            )
+
+
+@dataclass(slots=True)
+class RobotContext:
+    """Context object containing all information needed for robot state transitions.
+
+    This is an immutable snapshot of world state at a single point in time.
+    Passed to all state machines during execution.
+    """
+
+    robot_id: int
+    is_yellow: bool
+    my_state: EntityState  # My position and velocity
+    ball: EntityState  # Ball position and velocity
+    # Other robots on my team (excluding self)
+    teammates: dict[int, EntityState]
+    opponents: dict[int, EntityState]  # All robots on opposing team
+    has_possession: bool
+
+    def __post_init__(self):
+        """Validate shapes and constraints."""
+        # Robot positions should be [x, y, orientation]
+        if self.my_state.position.shape != (3,):
+            raise ValueError(
+                f"my_state.position must have shape (3,), got {self.my_state.position.shape}"
+            )
+
+        # Ball position should be [x, y]
+        if self.ball.position.shape != (2,):
+            raise ValueError(
+                f"ball.position must have shape (2,), got {self.ball.position.shape}"
+            )
+
+
+class WorldState:
+    """Single source of truth for world state across all robots.
+
+    Tracks state history to compute velocities. Updated once per frame in the main process.
+    Provides RobotContext views for individual robots.
+    """
+
+    def __init__(self):
+        """Initialize world state with empty data."""
+        # Current state
+        self._ball: EntityState = EntityState(
+            position=np.zeros(2, dtype=np.float32),
+            velocity=np.zeros(2, dtype=np.float32)
+        )
+        # (is_yellow: bool, robot_id: int) -> EntityState
+        self._robots: dict[tuple[bool, int], EntityState] = {}
+
+        # History for velocity computation
+        self._prev_ball_pos: np.ndarray | None = None
+        self._prev_robot_positions: dict[tuple[bool, int], np.ndarray] = {}
+        self._prev_timestamp: float | None = None
+
+    def update(self, wm: "WorldModel", timestamp: float) -> None:
+        """Update world state from world model.
+
+        Args:
+            wm: WorldModel instance with latest vision data
+            timestamp: Current timestamp in seconds
+        """
+        # Compute time delta
+        dt = (timestamp - self._prev_timestamp) if self._prev_timestamp is not None else 0.0
+
+        # Update ball
+        ball_pos = wm.get_latest_frame().ball.position
+        if self._prev_ball_pos is not None and dt > 0:
+            ball_vel = (ball_pos - self._prev_ball_pos) / dt
+        else:
+            ball_vel = np.zeros(2, dtype=np.float32)
+        self._ball = EntityState(position=ball_pos, velocity=ball_vel)
+
+        # Update robots - collect all visible robots from world model
+        new_robots: dict[tuple[bool, int], EntityState] = {}
+
+        # Helper to process robots for a team
+        for is_yellow in [True, False]:
+            for robot_id in range(16):  # SSL allows robot IDs 0-15
+                try:
+                    robot = wm.get_our_robots(us=is_yellow, robot_id=robot_id)
+                    if robot is None:
+                        continue
+                    robot_pos: np.ndarray = robot.position  # type: ignore
+                    robot_key = (is_yellow, robot_id)
+
+                    # Compute velocity
+                    if robot_key in self._prev_robot_positions and dt > 0:
+                        robot_vel = (
+                            robot_pos - self._prev_robot_positions[robot_key]) / dt
+                    else:
+                        robot_vel = np.zeros(3, dtype=np.float32)
+
+                    new_robots[robot_key] = EntityState(
+                        position=robot_pos, velocity=robot_vel)
+                    self._prev_robot_positions[robot_key] = robot_pos.copy()
+                except Exception:
+                    # Robot not visible
+                    pass
+
+        self._robots = new_robots
+
+        # Store for next frame
+        self._prev_ball_pos = ball_pos.copy()
+        self._prev_timestamp = timestamp
+
+    def get_robot_context(self, robot_id: int, is_yellow: bool) -> "RobotContext":
+        """Build RobotContext for a specific robot.
+
+        Args:
+            robot_id: Robot ID (0-15)
+            is_yellow: True for yellow team, False for blue team
+
+        Returns:
+            RobotContext containing world view for this robot
+        """
+        my_key = (is_yellow, robot_id)
+        my_state = self._robots.get(my_key)
+
+        if my_state is None:
+            raise ValueError(
+                f"Robot {robot_id} ({'yellow' if is_yellow else 'blue'}) not found in world state")
+
+        # Build teammates dict (same team, excluding self)
+        teammates = {
+            rid: state
+            for (team_is_yellow, rid), state in self._robots.items()
+            if team_is_yellow == is_yellow and rid != robot_id
+        }
+
+        # Build opponents dict (opposite team)
+        opponents = {
+            rid: state
+            for (team_is_yellow, rid), state in self._robots.items()
+            if team_is_yellow != is_yellow
+        }
+
+        # Check possession
+        dist = float(np.linalg.norm(
+            self._ball.position - my_state.position[:2]))
+        has_possession = dist < POSSESSION_THRESHOLD
+
+        return RobotContext(
+            robot_id=robot_id,
+            is_yellow=is_yellow,
+            my_state=my_state,
+            ball=self._ball,
+            teammates=teammates,
+            opponents=opponents,
+            has_possession=has_possession
+        )
+
+    @property
+    def ball(self) -> EntityState:
+        """Get current ball state."""
+        return self._ball
+
+    def get_robot_state(self, robot_id: int, is_yellow: bool) -> EntityState | None:
+        """Get state of a specific robot, or None if not visible."""
+        return self._robots.get((is_yellow, robot_id))
