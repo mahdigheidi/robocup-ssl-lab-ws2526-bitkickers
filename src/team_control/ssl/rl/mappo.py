@@ -1,12 +1,12 @@
 from multiprocessing import Process, Queue, Event, set_start_method
 import time
 
-from team_control.robot import role
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Normal
 
+from team_control.robot import role
 from team_control.ssl.vision.process import vision_worker
 from team_control.world.model_manager import WorldModelManager
 from team_control.world.model_runner import wm_runner

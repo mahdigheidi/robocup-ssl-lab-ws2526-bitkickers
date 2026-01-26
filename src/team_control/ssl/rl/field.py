@@ -1,7 +1,7 @@
 class Field:
     division_to_dims = {
         # 'DivisionName': [x_max, y_max, goal_width, penalty_width, penalty_depth, radius]
-        # 'A': [6000, 4500, 1800, 3600, 1800, 500],
+        'A': [6000, 4500, 1800, 3600, 1800, 500],
         'B': [4500, 3000, 1000, 2000, 1000, 500],
         'S': [1500, 1000, 800, 667, 334, 350],
         'S_Easy': [1500, 1000, 2000, 667, 334, 350]
