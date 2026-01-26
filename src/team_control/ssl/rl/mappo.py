@@ -1,6 +1,7 @@
-from multiprocessing import Process, Queue
+from multiprocessing import Process, Queue, Event, set_start_method
 import time
 
+from team_control.robot import role
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -85,6 +86,13 @@ def sample_action(mu, std):
 
 
 def pack_transition(agent_id, state, action, logp, reward, done, hidden, value):
+    # detach hidden states
+    if hidden is not None:
+        h, c = hidden
+        hidden = (h.detach().cpu(), c.detach().cpu())
+    # detach value
+    if torch.is_tensor(value):
+        value = value.detach().cpu()
     return {
         "agent_id": agent_id,
         "state": state,
@@ -164,11 +172,16 @@ def mappo_update(policy, optimizer, buffer, clip=0.2, vf_coef=0.5, ent_coef=0.01
 
 
 def run_agent(halt_event,
-            #   rollout_queue: Queue,
-            #   policy_state_queue: Queue,
-              env: FootballEnv,
-              device: torch.device,
-              agent_id: int):
+              rollout_queue,
+              policy_state_queue,
+              wm,
+              device,
+              agent_id,
+              is_team_yellow,
+              role,
+              ):
+
+    env = FootballEnv(wm, "127.0.0.1", 20011, agent_id, is_team_yellow, role, True)
 
     hidden = None
     local_policy = MAPPOPolicy(Encoder(), num_agents=4).to(device)
@@ -198,7 +211,8 @@ def run_agent(halt_event,
 
         mu, std, hidden, h = local_policy.actor_forward(robot, ball, team, opp, hidden)
         actions, logp, entropy = sample_action(mu, std)
-        value = local_policy.central_value(h).detach().cpu()
+        value = torch.zeros(1) #placeholder
+        #value = local_policy.central_value(h).detach().cpu()
 
         next_state, reward, done = env.step(actions)
 
@@ -257,37 +271,39 @@ def mappo(wm, halt_event, is_team_yellow):
 
     rollout_queue = Queue()
 
-    env_goalie = FootballEnv(wm, "127.0.0.1", 20011, 0, is_team_yellow, 0, True,)
+    policy_state_queue = Queue()
+
+    #env_goalie = FootballEnv(wm, "127.0.0.1", 20011, 0, 0, True,)
     goalie = Process(
         target=run_agent,
-        # args=(halt_event, rollout_queue, env_goalie, device, 0)
-        args=(halt_event, env_goalie, device, 0)
+        args=(halt_event, rollout_queue, policy_state_queue, wm, device, 0, is_team_yellow, 0)
     )
 
-    env_p1 = FootballEnv(wm, "127.0.0.1", 20011, 1, is_team_yellow, 1, True,)
+    #env_p1 = FootballEnv(wm, "127.0.0.1", 20011, 1, is_team_yellow, 1, True,)
     player_1 = Process(
         target=run_agent,
-        args=(halt_event, env_p1, device, 1)
+        args=(halt_event, rollout_queue, policy_state_queue, wm, device, 1, is_team_yellow, 1)
     )
 
-    env_p2 = FootballEnv(wm, "127.0.0.1", 20011, 2, is_team_yellow, 1, True,)
+    #env_p2 = FootballEnv(wm, "127.0.0.1", 20011, 2, is_team_yellow, 1, True,)
     player_2 = Process(
         target=run_agent,
         # args=(halt_event, rollout_queue, env_p2, device, 2)
-        args=(halt_event, env_p2, device, 2)
+        args=(halt_event, rollout_queue, policy_state_queue, wm, device, 2, is_team_yellow, 1)
     )
 
-    env_p3 = FootballEnv(wm, "127.0.0.1", 20011, 3, is_team_yellow, 1, True,)
+    #env_p3 = FootballEnv(wm, "127.0.0.1", 20011, 3, is_team_yellow, 1, True,)
     player_3 = Process(
         target=run_agent,
         # args=(halt_event, rollout_queue, env_p3, device, 3)
-        args=(halt_event, env_p3, device, 3)
+        args=(halt_event, rollout_queue, policy_state_queue, wm, device, 3, is_team_yellow, 1)
     )
 
     trainer = Process(
         target=train_model,
-        args=(halt_event, rollout_queue, device, num_agents)
+        args=(halt_event, rollout_queue, policy_state_queue, num_agents)
     )
+    
 
     print("Starting agents...")
     goalie.start()
@@ -305,6 +321,10 @@ def run_referee(wm, halt_event):
 
 
 if __name__ == '__main__':
+    try:
+        set_start_method('fork')
+    except RuntimeError:
+        pass
     vision_q = Queue()
     gc_q = Queue()  # GameController queue, not in use
 
@@ -318,7 +338,7 @@ if __name__ == '__main__':
     vision_wkr.start()
     wmr.start()
 
-    halt_event = 3
+    halt_event = Event()
 
     referee_runner = Process(target=run_referee, args=(wm, halt_event,))
 
