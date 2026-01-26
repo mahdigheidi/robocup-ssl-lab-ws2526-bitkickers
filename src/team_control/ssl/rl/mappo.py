@@ -211,8 +211,8 @@ def run_agent(halt_event,
 
         mu, std, hidden, h = local_policy.actor_forward(robot, ball, team, opp, hidden)
         actions, logp, entropy = sample_action(mu, std)
-        value = torch.zeros(1) #placeholder
-        #value = local_policy.central_value(h).detach().cpu()
+        value = torch.zeros(1)  # placeholder
+        # value = local_policy.central_value(h).detach().cpu()
 
         next_state, reward, done = env.step(actions)
 
@@ -273,26 +273,26 @@ def mappo(wm, halt_event, is_team_yellow):
 
     policy_state_queue = Queue()
 
-    #env_goalie = FootballEnv(wm, "127.0.0.1", 20011, 0, 0, True,)
+    # env_goalie = FootballEnv(wm, "127.0.0.1", 20011, 0, 0, True,)
     goalie = Process(
         target=run_agent,
         args=(halt_event, rollout_queue, policy_state_queue, wm, device, 0, is_team_yellow, 0)
     )
 
-    #env_p1 = FootballEnv(wm, "127.0.0.1", 20011, 1, is_team_yellow, 1, True,)
+    # env_p1 = FootballEnv(wm, "127.0.0.1", 20011, 1, is_team_yellow, 1, True,)
     player_1 = Process(
         target=run_agent,
         args=(halt_event, rollout_queue, policy_state_queue, wm, device, 1, is_team_yellow, 1)
     )
 
-    #env_p2 = FootballEnv(wm, "127.0.0.1", 20011, 2, is_team_yellow, 1, True,)
+    # env_p2 = FootballEnv(wm, "127.0.0.1", 20011, 2, is_team_yellow, 1, True,)
     player_2 = Process(
         target=run_agent,
         # args=(halt_event, rollout_queue, env_p2, device, 2)
         args=(halt_event, rollout_queue, policy_state_queue, wm, device, 2, is_team_yellow, 1)
     )
 
-    #env_p3 = FootballEnv(wm, "127.0.0.1", 20011, 3, is_team_yellow, 1, True,)
+    # env_p3 = FootballEnv(wm, "127.0.0.1", 20011, 3, is_team_yellow, 1, True,)
     player_3 = Process(
         target=run_agent,
         # args=(halt_event, rollout_queue, env_p3, device, 3)
@@ -303,7 +303,6 @@ def mappo(wm, halt_event, is_team_yellow):
         target=train_model,
         args=(halt_event, rollout_queue, policy_state_queue, num_agents)
     )
-    
 
     print("Starting agents...")
     goalie.start()
