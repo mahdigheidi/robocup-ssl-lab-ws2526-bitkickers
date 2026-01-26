@@ -10,7 +10,7 @@ from team_control.ssl.rl.callback import TrainingCallback
 # from team_control.ssl.rl.curriculum import Curriculum
 from team_control.ssl.rl.encoder import Encoder
 from team_control.ssl.rl.env import FootballEnv
-from team_control.ssl.offpolicy_rl.replay_buffer import ReplayBuffer
+from team_control.ssl.archived.replay_buffer import ReplayBuffer
 from team_control.ssl.vision.process import vision_worker
 from team_control.utils.visualization import plot_rewards
 from team_control.ssl.rl.reward import Reward

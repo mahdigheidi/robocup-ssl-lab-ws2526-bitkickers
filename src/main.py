@@ -3,7 +3,7 @@ from multiprocessing import Process, Queue
 from team_control.world.model_manager import WorldModelManager
 from team_control.world.model_runner import wm_runner
 from team_control.ssl.vision.process import vision_worker
-from team_control.ssl.offpolicy_rl.agent import agent_process
+from team_control.ssl.archived.agent import agent_process
 
 
 def main():

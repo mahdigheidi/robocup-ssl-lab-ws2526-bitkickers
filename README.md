@@ -48,6 +48,50 @@ but for PPO there is a cold start problem, we remove this by training it on our 
 - Running and getting grSim to work was an absolute pain on MAC. both because of the old resources that the grSim uses(such as old cmake, ode, etc). and also because of the macos underlying network structure and how it handles the multicasting. We have tried to explain our approach here in the following so people can use this data to use it to run it on mac in the most straightforward way possible.
 - Here we mentions the issues and the ways we have solved them. Also we mention the lessons learned.
 
+grSim installation on Mac Arm Machines(M1 onwards)
+
+**Very important note**: grSim will be compiled with CMake < 4, if you have CMake >= 4 you have to download v3.X.X matching your arch from this link[https://github.com/Kitware/CMake/releases].
+
+--> install CMake 3.X.X
+brew install pkg-config
+brew install ode
+brew install qt@5
+**Note**: as grSim uses a very old version of protobuf/vartypes and brew doesn't have it, skip the installation so the CMake downloads and builds the required version.
+
+git clone git@github.com:RoboCup-SSL/grSim.git
+cd grSim/
+mkdir build
+cd build
+
+./path/to/cmake3.X.X -DCMAKE_INSTALL_PREFIX=/opt/homebrew/Cellar ..
+**Note**: in the grSim offical install instructions that is denoted as /usr/local which is the path on intel based machines, for installation with homebrew use /opt/homebrew/Cellar
+
+
+After you install it cd ../bin/ and ./grSim to run it. (or if you want just cp it to /opt/homebrew/bin so its visible from the PATH)
+
+**Issue**: you may see the following message repeatedly in the console log "Sending UDP datagram failed (maybe too large?). Size was: X byte(s)."
+this issue is related to how MacOS handles packet sending on multicast mode, to resolve this issue set the 'Vision multicast address' to the broadcast address of your current network interface, for example if you're using wifi and network interface is "en0" just ifconfig -> look for en0 -> get the inet broadcast address and set it for vision multicast address.
+You also have to configure the client to use this for vision worker.
+
+# Ubuntu/VM
+sudo apt install git build-essential cmake pkg-config qtbase5-dev libqt5opengl5-dev libgl1-mesa-dev libglu1-mesa-dev libprotobuf-dev protobuf-compiler libode-dev libboost-dev
+sudo apt install tini libqt5opengl5 libode8 x11vnc xvfb
+cd grSim/
+mkdir build
+cd build/
+cmake -DCMAKE_INSTALL_PREFIX=/usr/local ..
+make
+cd ../..
+
+# run grSim headless
+grSim -H -platform offscreen
+# grsim runs with division B by default
+
+# MacOS ARM Series
+
+
+---------------------
+
 ## Technical implementation:
 In this project I have tried to stay true to the best software engineering practices to the extent of my knowledge. Although I may have not 100 percent succeeded but it's something.
 Main ideas our project is built on
