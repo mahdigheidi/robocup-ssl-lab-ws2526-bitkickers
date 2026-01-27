@@ -1,18 +1,19 @@
 from multiprocessing import Process, Queue, Event, set_start_method
 import time
+import traceback
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Normal
 
-from team_control.robot import role
 from team_control.ssl.vision.process import vision_worker
 from team_control.world.model_manager import WorldModelManager
+from team_control.world.model import WorldModel
 from team_control.world.model_runner import wm_runner
 from team_control.ssl.rl.encoder import Encoder
 from team_control.ssl.rl.env import FootballEnv
-from team_control.ssl.rl.referee import Referee
+from team_control.ssl.rl.referee import Referee, referee_worker
 from team_control.ssl.rl.field import Field
 
 
@@ -119,7 +120,13 @@ class MAPPORolloutBuffer:
 # ============================================================
 # GAE
 # ============================================================
-def compute_gae(rewards, values, dones, gamma=0.99, lam=0.95):
+def compute_gae(
+    rewards,
+    values,
+    dones,
+    gamma=0.99,
+    lam=0.95
+):
     advantages = []
     gae = 0
     values = values + [0]
@@ -171,15 +178,16 @@ def mappo_update(policy, optimizer, buffer, clip=0.2, vf_coef=0.5, ent_coef=0.01
     optimizer.step()
 
 
-def run_agent(halt_event,
-              rollout_queue,
-              policy_state_queue,
-              wm,
-              device,
-              agent_id,
-              is_team_yellow,
-              role,
-              ):
+def run_agent(
+    halt_event: Event,
+    rollout_queue: Queue,
+    policy_state_queue: Queue,
+    wm: WorldModel,
+    device: torch.device,
+    agent_id: int,
+    is_team_yellow: bool,
+    role: int,
+):
 
     env = FootballEnv(wm, "127.0.0.1", 20011, agent_id, is_team_yellow, role, True)
 
@@ -227,8 +235,12 @@ def run_agent(halt_event,
             hidden = local_policy.init_hidden(device)
 
 
-def train_model(halt_event, rollout_queue: Queue, policy_state_queue: Queue, num_agents: int):
-
+def train_model(
+    halt_event: Event,
+    rollout_queue: Queue,
+    policy_state_queue: Queue,
+    num_agents: int
+):
     device = torch.device("cpu")
     encoder = Encoder()
     policy = MAPPOPolicy(encoder, num_agents).to(device)
@@ -264,7 +276,11 @@ def train_model(halt_event, rollout_queue: Queue, policy_state_queue: Queue, num
             print("[Trainer] Policy updated and broadcasted")
 
 
-def mappo(wm, halt_event, is_team_yellow):
+def mappo(
+    wm: WorldModel,
+    halt_event: Event,
+    is_team_yellow: bool,
+):
     print("Starting MAPPO for team", "Yellow" if is_team_yellow else "Blue")
     device = torch.device("cpu")
     num_agents = 4
@@ -312,20 +328,16 @@ def mappo(wm, halt_event, is_team_yellow):
     trainer.start()
 
 
-def run_referee(wm, halt_event):
-    field = Field('B')
-    referee = Referee(field, wm, halt_event)
-    while True:
-        referee.check()
-
-
 if __name__ == '__main__':
     try:
         set_start_method('fork')
     except RuntimeError:
-        pass
+        traceback.print_exc()
+        print("Could not set start method to 'fork', continuing with default.")
+
     vision_q = Queue()
     gc_q = Queue()  # GameController queue, not in use
+    halt_event = Event()
 
     vision_wkr = Process(target=vision_worker, args=(vision_q, True, 10020,))
 
@@ -333,19 +345,15 @@ if __name__ == '__main__':
     wm_manager.start()
     wm = wm_manager.WorldModel()  # pylint: disable=no-member
     wmr = Process(target=wm_runner, args=(wm, vision_q, gc_q,))
+    referee_wkr = Process(target=referee_worker, args=(wm, halt_event,))
 
     vision_wkr.start()
     wmr.start()
-
-    halt_event = Event()
-
-    referee_runner = Process(target=run_referee, args=(wm, halt_event,))
-
-    referee_runner.start()
+    referee_wkr.start()
 
     mappo(wm, halt_event, is_team_yellow=True)
     mappo(wm, halt_event, is_team_yellow=False)
 
-    referee_runner.join()
+    referee_wkr.join()
     vision_wkr.join()
     wmr.join()

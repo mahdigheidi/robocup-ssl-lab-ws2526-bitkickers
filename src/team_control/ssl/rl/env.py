@@ -8,7 +8,6 @@ import torch
 from team_control.network.robot_command import RobotCommand
 from team_control.network.sender import GrSimSender
 from team_control.network.send_ball_grsim import BallSender
-from team_control.robot.spawn_robot import send_robot_to_grsim
 from team_control.world.model import WorldModel
 from team_control.ssl.rl.field import Field
 from team_control.ssl.rl.reward import Reward
@@ -18,7 +17,16 @@ from team_control.ssl.vision import Ball, Robot
 # CONFIG THE FOOTBALL ENV FOR PLAYERS ON THE LEFT SIDE
 
 class FootballEnv:
-    def __init__(self, wm, sim_ip, cmd_listen_port, robot_id, is_team_yellow, role, training):
+    def __init__(
+        self,
+        wm: WorldModel,
+        sim_ip: str,
+        cmd_listen_port: int,
+        robot_id: int,
+        is_team_yellow: bool,
+        role: int,
+        training: bool
+    ):
         """
         wm: WorldModel instance (for getting robot/ball states)
         spawner: Object containing goal_line_x or other default positions
@@ -249,6 +257,7 @@ def get_my_normalized_state(robot, ball, teammates, opponents, is_team_yellow):
 
 def get_role(position):
     x, y, _ = position
+    # If the player is in the penalty area, it is a goalie
     if -1000 <= y <= 1000 and (x >= 3300 or x <= -3300):
         return 0
     return 1

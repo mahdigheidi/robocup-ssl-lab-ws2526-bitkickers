@@ -1,9 +1,10 @@
 import time
 import random
 import math
-from multiprocessing import Event
 
 from team_control.network.send_ball_grsim import BallSender
+from team_control.ssl.rl.field import Field
+
 
 class Referee:
     """
@@ -95,6 +96,7 @@ class Referee:
             self.stop_episode()
             return
     # -------------------------------------------------
+
     def _is_ball_in_field(self, ball_pos):
         x, y = ball_pos
         return self.field.x_min <= x <= self.field.x_max and self.field.y_min <= y <= self.field.y_max
@@ -113,3 +115,13 @@ class Referee:
             return True
 
         return False
+
+
+def referee_worker(
+    wm,
+    halt_event,
+):
+    field = Field('B')
+    referee = Referee(field, wm, halt_event)
+    while True:
+        referee.check()
