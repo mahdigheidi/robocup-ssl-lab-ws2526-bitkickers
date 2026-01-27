@@ -27,6 +27,7 @@ from TeamControl.SSL.grSim.striker_process import striker_process
 from TeamControl.SSL.grSim.obstacle_avoidance_process import obstacle_avoidance_process
 from TeamControl.SSL.grSim.passing_process import passing_process
 from TeamControl.SSL.grSim.interceptor_process import interceptor_process
+from TeamControl.SSL.grSim.team import team_control_process
 
 # in multiprocessing this can only be a simple process
 
@@ -68,32 +69,19 @@ def main():
 
     # Sandbox process for sending commands to grSim
     # sandbox = Process(target=sandbox_process, args=(wm,))
-    # goalie = Process(target=goalie_process, args=(wm,)) # This is where you will implement your goalie logic
-    # striker = Process(target=striker_process, args=(wm,)) # striker process
-    # obstacle_avoidance = Process(target=obstacle_avoidance_process, args=(wm,))
-    passing = Process(target=passing_process, args=(wm,))
-    interceptor = Process(target=interceptor_process, args=(wm,))
+    team = Process(target=team_control_process, args=(wm,)) 
     # Start all processes
     vision_wkr.start()
     wmr.start()
     # sandbox.start()
-    # goalie.start()
-    # striker.start()
-    # obstacle_avoidance.start()
-    passing.start()
-    interceptor.start()
-    
+    team.start()
     # some_other_process2.start()
     
     # Wait for all processes to finish
     vision_wkr.join()
     wmr.join()
-    # sandbox.join()
-    # goalie.join()
-    # striker.join()
-    # obstacle_avoidance.join()
-    passing.join()
-    interceptor.join()
+  
+    team.join()
     # some_other_process2.join()
 
 if __name__ == "__main__":

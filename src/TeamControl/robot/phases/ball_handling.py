@@ -7,6 +7,7 @@ from TeamControl.network.ssl_sockets import grSimSender
 from TeamControl.network.robot_command import RobotCommand
 from TeamControl.robot.context import RobotContext
 from TeamControl.ball.ball_idle_spawner import BallIdleSpawner
+from TeamControl.obstacles.rules import constrain_target
 
 
 # =============================================================================
@@ -181,6 +182,7 @@ class AligningWithTargetState(State[RobotContext]):
 
         target_pos = list(context.teammates.values())[0].position
 
+
         # Check if path is blocked - if so, move sideways to get clear
         vx, vy = 0, 0
         if context.opponents:
@@ -197,6 +199,7 @@ class AligningWithTargetState(State[RobotContext]):
             )
             if reposition_target is not None:
                 # Need to move sideways while dribbling
+
                 vx, vy = movement.go_to(
                     context.my_state.position,
                     reposition_target,
