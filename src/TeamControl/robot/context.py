@@ -151,6 +151,7 @@ class WorldState:
         """
         my_key = (is_yellow, robot_id)
         my_state = self._robots.get(my_key)
+    
         
         if my_state is None:
             raise ValueError(f"Robot {robot_id} ({'yellow' if is_yellow else 'blue'}) not found in world state")
@@ -180,7 +181,7 @@ class WorldState:
             ball=self._ball,
             teammates=teammates,
             opponents=opponents,
-            has_possession=has_possession
+            has_possession=has_possession,
         )
     
     @property

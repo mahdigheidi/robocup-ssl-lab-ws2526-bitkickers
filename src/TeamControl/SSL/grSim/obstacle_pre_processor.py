@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from TeamControl.obstacles.helpers import *
 
 # Field bounds
-X_MIN, X_MAX = -4500.0, 4500.0
+X_MIN, X_MAX = -4800.0, 4800.0
 Y_MIN, Y_MAX = -3000.0, 3000.0
 
 # Cell size
@@ -233,9 +233,20 @@ def dijkstra_min_cost(a, start, goal):
 def cell_to_point(ix: int, iy: int) -> Tuple[float, float]:
     return cell_center(ix, iy)
 
-def preprocess_best_path(start, goal, static_obstacles, dynamic_obstacles):
+def preprocess_best_path(start, goal, static_obstacles, dynamic_obstacles, allow_defense:bool, is_yellow:bool):
     a = np.ones((NX, NY), dtype=float)
-    a = mark_forbidden_rect(a, 3400.0, 4400.0, -1100.0, 1100.0)
+    if allow_defense:
+    # Yellow defense
+
+        if is_yellow:
+            # block BLUE defense only
+            a = mark_forbidden_rect(a, -4400.0, -3400.0, -1100.0, 1100.0)
+        else:
+            # block YELLOW defense only
+            a = mark_forbidden_rect(a, 3400.0, 4400.0, -1100.0, 1100.0)
+    else:
+        a = mark_forbidden_rect(a, 3400.0, 4400.0, -1100.0, 1100.0)      # yellow defense
+        a = mark_forbidden_rect(a, -4400.0, -3400.0, -1100.0, 1100.0)    # blue defense
 
     # 3.b the four narrow edge strips (assumption explained above)
     # y in (-3000, -2900) and (2900, 3000)

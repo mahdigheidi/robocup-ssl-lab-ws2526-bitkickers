@@ -1,8 +1,12 @@
 import math
 import time
 
+from TeamControl.robot import context
 import numpy as np
 from TeamControl.world.transform_cords import world2robot
+from TeamControl.SSL.grSim.obstacle_pre_processor import preprocess_best_path
+from TeamControl.obstacles.helpers import ROBOT_RADIUS
+
 
 
 class PDController:
@@ -80,6 +84,16 @@ class RobotMovement:
     def __init__(self) -> None:
         self.position_controller = PDController()
         self.rotation_controller = PDController()
+        # --- path planning cache ---
+        self._path: list[tuple[float, float]] | None = None
+        self._path_goal: tuple[float, float] | None = None
+        self._path_index: int = 0
+        self._last_plan_time: float = 0.0
+        self.allow_defense_area = False
+
+    def set_allow_defense(self, allow: bool):
+        self.allow_defense_area = allow
+
 
     def go_to(
         self,
@@ -93,6 +107,7 @@ class RobotMovement:
         differential_gain: float = 0.01,
         differential_low_pass: float = 0.5,
         stop_threshold: float = 1.0,  # mm
+       
     ) -> tuple[float, float]:
         """
         Calculate the velocity (vx, vy) for the robot to move towards a target position.
@@ -108,7 +123,7 @@ class RobotMovement:
             differential_gain: D gain for position control
             differential_low_pass: Low-pass filter for position derivative
             stop_threshold: Distance threshold below which robot stops (mm)
-
+            allow: Whether to allow movement into defense area
         Returns:
             tuple[float, float]: Velocity components (vx, vy) in m/s.
         """
@@ -121,8 +136,82 @@ class RobotMovement:
 
         # Convert target from world coordinates to robot coordinates
         dx, dy = world2robot((x, y, theta), target)  # type: ignore
+        
+        # -------------------------------
+        # OBSTACLE-AWARE TARGET SELECTION
+        # -------------------------------
+        target_xy = (float(target[0]), float(target[1]))
 
-        # Calculate position error
+        # Collect obstacles from context if provided
+        static_obstacles = []
+        dynamic_obstacles = []
+
+        if "static_obstacles" in locals():
+            static_obstacles = locals()["static_obstacles"]
+
+        if "dynamic_obstacles" in locals():
+            dynamic_obstacles = locals()["dynamic_obstacles"]
+
+        # Replan path if needed
+        if target_xy != self._path_goal or time.time() - self._last_plan_time > 1.0:
+            try:
+                self._path = preprocess_best_path(
+                    start=(x, y),
+                    goal=target_xy,
+                    static_obstacles=static_obstacles,
+                    dynamic_obstacles=dynamic_obstacles,
+                    allow_defense=self.allow_defense_area,
+                    is_yellow=context.is_yellow,
+                    
+                )
+                self._path_goal = target_xy
+                self._path_index = 0
+                self._last_plan_time = time.time()
+            except Exception:
+                self._path = None
+
+        # Choose next waypoint
+        if self._path and self._path_index < len(self._path):
+            waypoint = self._path[self._path_index]
+
+            # Advance waypoint if close
+            if math.hypot(waypoint[0] - x, waypoint[1] - y) < 150:
+                self._path_index += 1
+                if self._path_index < len(self._path):
+                    waypoint = self._path[self._path_index]
+                else:
+                    waypoint = target_xy
+        else:
+            waypoint = target_xy
+
+        # -------------------------------
+        # PD CONTROL (UNCHANGED)
+        # -------------------------------
+        dx, dy = world2robot((x, y, theta), waypoint)
+
+        position_error = math.hypot(dx, dy)
+
+        desired_v = self.position_controller.compute(
+            error=position_error,
+            max_output=max_speed,
+            max_acceleration=max_acceleration,
+            p_gain=proportional_gain,
+            d_gain=differential_gain,
+            d_low_pass=differential_low_pass,
+            stop_threshold=stop_threshold,
+        )
+
+        if position_error > 1e-6:
+            vx_cmd = (dx / position_error) * desired_v
+            vy_cmd = (dy / position_error) * desired_v
+        else:
+            vx_cmd = 0.0
+            vy_cmd = 0.0
+
+        return vx_cmd / 1000, vy_cmd / 1000
+
+
+        """# Calculate position error
         position_error = math.hypot(dx, dy)
 
         # Use position controller to get desired speed
@@ -145,7 +234,7 @@ class RobotMovement:
             vy_cmd = 0.0
 
         # Convert linear velocities from mm/s to m/s
-        return vx_cmd / 1000, vy_cmd / 1000
+        return vx_cmd / 1000, vy_cmd / 1000"""
 
     def face_towards(
         self,

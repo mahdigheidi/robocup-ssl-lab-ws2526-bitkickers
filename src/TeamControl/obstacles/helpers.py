@@ -31,7 +31,7 @@ def distance(p1, p2):
 # ----------------------------------------------------
 # -------- STOP CONDITION CHECKING HELPERS -----------
 # ----------------------------------------------------
-def point_in_defense_area(agent_pos, robot_radius=ROBOT_RADIUS):
+def point_in_defense_area(agent_pos, robot_radius=ROBOT_RADIUS, allow=False):
     """
     Check if the robot body (circle with radius) intersects the opponent defense area polygon.
 
@@ -42,6 +42,8 @@ def point_in_defense_area(agent_pos, robot_radius=ROBOT_RADIUS):
     Returns:
         bool: True if any part of the robot is inside the defense area.
     """
+    if allow:
+        return False
     robot_circle = Point(agent_pos).buffer(robot_radius)
     defense_area_poly = Polygon(DEFENSE_AREA_POLYGON)
     return robot_circle.intersects(defense_area_poly)
@@ -87,7 +89,7 @@ def is_in_field(position):
     point = Point(position)
     return FIELD_POLYGON.contains(point)
 
-def check_stop_conditions(agent_pos, target_pos, static_robots, dynamic_robots, elapsed_time=0, time_limit=30):
+def check_stop_conditions(agent_pos, target_pos, static_robots, dynamic_robots, elapsed_time=0, time_limit=30, is_goalie=False):
     """
     Check all stop conditions and return (should_stop, message).
 
@@ -114,7 +116,10 @@ def check_stop_conditions(agent_pos, target_pos, static_robots, dynamic_robots, 
         if check_collisions(agent_pos, all_obstacles):
             return True, "Collision detected with another robot!\n0 POINTS"
 
-    if point_in_defense_area(agent_pos):
+    if point_in_defense_area(agent_pos, alllow=is_goalie):
         return True, "Robot entered opponent's defense area!\n0 POINTS"
 
     return False, ""
+
+def ball_in_defense_area(ball_pos):
+    return Point(ball_pos).within(Polygon(DEFENSE_AREA_POLYGON))

@@ -19,6 +19,8 @@ from TeamControl.robot.roles.support import Support
 from TeamControl.robot.roles.Defender import Defender
 from TeamControl.robot.roles.goalie import Goalkeeper
 
+from TeamControl.robot.roles.passer import Passer
+
 
 SIM_IP = "127.0.0.1"
 CMD_LISTEN_PORT = 20011
@@ -26,6 +28,7 @@ DIVISION = "B"
 
 
 YELLOW_GOAL = np.array([4500.0, 0.0])
+
 BLUE_GOAL = np.array([-4500.0, 0.0])
 
 
@@ -65,7 +68,7 @@ def team_control_process(wm: WorldModel):
     support = Robot(
         robot_id=2,
         is_yellow=True,
-        role=Support(yellow_goal=YELLOW_GOAL),
+        role=Support(),
     )
 
     striker = Robot(
@@ -95,6 +98,9 @@ def team_control_process(wm: WorldModel):
     striker.spawn(x=-2500, y=0, orientation=0.0)
     time.sleep(0.05)
 
+    blue_goalie = None
+    #blue_striker = None
+    blue_robots = {}
     # Spawn blue goalie for testing purposes
     try:
         blue_goalie = Robot(
@@ -102,11 +108,20 @@ def team_control_process(wm: WorldModel):
             is_yellow=False,
             role=Goalkeeper(),
         )
+        """blue_striker = Robot(
+            robot_id=3,
+            is_yellow=False,
+            role=Striker(),
+
+        )"""
         blue_goalie.spawn(x=-4500, y=0, orientation=0.0)
-        blue_robots = {0: blue_goalie}
+       # blue_striker.spawn(x=-2500, y=0, orientation=np.pi)
+        blue_robots = {0: blue_goalie} #, 3: blue_striker}
         time.sleep(0.05)
-    except Exception:
-        pass
+
+    except Exception as e:
+        print("Blue team spawn failed:", e)
+
 
     # Spawn ball
     send_ball_to_grsim(0.0, 0.0, 0.0, 0.0)
@@ -122,8 +137,9 @@ def team_control_process(wm: WorldModel):
  
     goalie.switch_phase(Goalkeeper.Phase.ACTIVE)
     defender.switch_phase(Defender.Phase.HOLD)
-    support.switch_phase(Support.Phase.BASIC)
-    striker.switch_phase(Striker.Phase.BASIC)
+    striker.switch_phase(Striker.Phase.RECEIVING)
+    support.switch_phase(Support.Phase.CHASING)
+    #blue_striker.switch_phase(Striker.Phase.RECEIVING)
     blue_goalie.switch_phase(Goalkeeper.Phase.ACTIVE)
 
 
@@ -139,9 +155,14 @@ def team_control_process(wm: WorldModel):
 
             for rid, robo in robots.items():
                 st = world_state.get_robot_state(rid, is_yellow=True)
-                bt = world_state.get_robot_state(rid, is_yellow=False)
+                
                 if st:
                     robo.update_position(st.position)
+                    
+            for rid, robo in blue_robots.items():  
+                bt = world_state.get_robot_state(rid, is_yellow=False)
+                if bt:      
+                    
                     robo.update_position(bt.position)
 
         # Execute behaviors
@@ -151,12 +172,14 @@ def team_control_process(wm: WorldModel):
                 world_state=world_state,
                 sender=sender,
                 spawner=spawner,
+            
             )
         for robo in blue_robots.values():
             robo.execute_behavior(
                 world_state=world_state,
                 sender=blue_sender,
                 spawner=spawner,
+              
             )
 
         #time.sleep(0.02)

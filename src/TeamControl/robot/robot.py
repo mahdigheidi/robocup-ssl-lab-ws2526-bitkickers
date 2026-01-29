@@ -1,8 +1,10 @@
 """Robot class - encapsulates a single robot with its role and phase-based behavior."""
 
 import logging
+from multiprocessing import context
 from typing import Generic, TypeVar
 from enum import Enum
+from TeamControl.robot.roles.goalie import Goalkeeper
 import numpy as np
 from TeamControl.robot.Movement import RobotMovement
 from TeamControl.robot.role import Role
@@ -36,6 +38,8 @@ class Robot(Generic[R]):
         self.is_yellow = is_yellow
         self.movement = RobotMovement()
         self.role = role
+        self.movement.allow_defense_area = isinstance(role, Goalkeeper)
+
 
         # Current state
         self.position: np.ndarray = np.array([0.0, 0.0, 0.0], dtype=np.float32)
@@ -86,6 +90,7 @@ class Robot(Generic[R]):
         self,
         world_state: WorldState,
         sender: grSimSender,
+        
         **kwargs,
     ):
         """
@@ -97,7 +102,12 @@ class Robot(Generic[R]):
             **kwargs: Additional parameters needed by state machines (e.g., spawner, passing_min_distance)
         """
         # Build context for this robot from world state
+     
         context = world_state.get_robot_context(self.robot_id, self.is_yellow)
+       
 
+    # 2. ROLE decides phase transitions (ADD THIS BLOCK)
+        if hasattr(self.role, "update_phase"):
+            self.role.update_phase(self,context)
         # Execute current phase's state machine
         self._phase_machine.execute(context, sender=sender, movement=self.movement, **kwargs)

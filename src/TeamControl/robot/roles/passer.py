@@ -1,5 +1,4 @@
 """Passing role - for two-robot passing exercise."""
-
 from enum import Enum, auto
 from TeamControl.robot.role import Role
 from TeamControl.robot.context import RobotContext
@@ -9,6 +8,7 @@ from TeamControl.robot.phases import (
     PassingStateMachine,
     ReceivingStateMachine,
 )
+
 
 
 class Passer(Role):
@@ -38,3 +38,4 @@ class Passer(Role):
             return ReceivingStateMachine()
         else:
             raise ValueError(f"Unknown phase: {phase}")
+ 

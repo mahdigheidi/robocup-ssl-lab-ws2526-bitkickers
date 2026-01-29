@@ -1,5 +1,5 @@
 """Shared ball handling state machines - reusable across roles."""
-
+from multiprocessing import context
 import numpy as np
 from typing import Optional, Type, Any
 from TeamControl.utils.state_machine import State, StateMachine
@@ -7,12 +7,10 @@ from TeamControl.network.ssl_sockets import grSimSender
 from TeamControl.network.robot_command import RobotCommand
 from TeamControl.robot.context import RobotContext
 from TeamControl.ball.ball_idle_spawner import BallIdleSpawner
-from TeamControl.obstacles.rules import constrain_target
+from TeamControl.obstacles.rules import avoid_defense_area_target
 
 
-# =============================================================================
 # Configuration Constants
-# =============================================================================
 
 # Distance thresholds (mm)
 CHASE_TO_APPROACH_DISTANCE = 200  # Switch from fast chase to gentle approach
@@ -50,6 +48,13 @@ SHADOW_WIDTH = 300  # mm - how wide the "blocked" zone is around the passing lan
 CENTER_BIAS_STRENGTH = 0.3  # How strongly to pull toward center (0-1)
 SEPARATION_BIAS_STRENGTH = 0.3  # How strongly to push away from teammate (0-1)
 MIN_SEPARATION_DISTANCE = 2000  # mm - ideal minimum distance between robots
+
+
+
+#striker constraints
+STRIKER_X_LIMIT = 1600.0
+STRIKER_MARGIN = 120.0
+
 
 
 def distance(pos0: np.ndarray, pos1: np.ndarray) -> float:
@@ -111,6 +116,7 @@ class ApproachingBallState(State[RobotContext]):
             max_acceleration=APPROACH_MAX_ACCELERATION,
             max_speed=APPROACH_MAX_SPEED,
         )
+        
         w = movement.face_towards(robot_pos=context.my_state.position, target=context.ball.position)
         sender.send_command(
             RobotCommand(robot_id=context.robot_id, vx=vx, vy=vy, w=w, kick=0, dribble=1)
@@ -140,10 +146,12 @@ class AligningWithTargetState(State[RobotContext]):
 
     def handle_transition(self, context: RobotContext) -> Optional[Type[State[RobotContext]]]:
         if not context.has_possession:
+          #  print(f"[R{context.robot_id}] ALIGN → lost possession")
             return ApproachingBallState
 
         # Check if aligned with target directly
         if not context.teammates:
+           # print(f"[R{context.robot_id}] ALIGN → no teammate")
             return None
 
         target_pos = list(context.teammates.values())[0].position
@@ -164,6 +172,11 @@ class AligningWithTargetState(State[RobotContext]):
         # Normalize angle difference to [-pi, pi]
         angle_diff = angle_to_target - my_orientation
         angle_diff = np.arctan2(np.sin(angle_diff), np.cos(angle_diff))
+        #print(
+        #f"[R{context.robot_id}] ALIGN "
+        #f"angle_diff={abs(angle_diff):.3f} "
+        #f"threshold={ALIGNMENT_THRESHOLD}"
+    #)
 
         # If aligned, transition to kicking
         if abs(angle_diff) < ALIGNMENT_THRESHOLD:
@@ -171,16 +184,27 @@ class AligningWithTargetState(State[RobotContext]):
 
         return None
 
+
+    
+
     def execute(self, context: RobotContext, **kwargs: Any) -> None:
         sender: grSimSender = kwargs["sender"]
         movement = kwargs["movement"]
         spawner: BallIdleSpawner = kwargs["spawner"]
 
+        def select_passing_target(context: RobotContext):
+        # choose most forward teammate (striker)
+            if context.is_yellow:
+                return min(context.teammates.values(), key=lambda t: t.position[0])
+            else:
+                return max(context.teammates.values(), key=lambda t: t.position[0])
+
         # Get first teammate as passing target
         if not context.teammates:
             return
 
-        target_pos = list(context.teammates.values())[0].position
+        target = select_passing_target(context)
+        target_pos = target.position
 
 
         # Check if path is blocked - if so, move sideways to get clear
@@ -472,11 +496,19 @@ class PositioningState(State[RobotContext]):
         movement = kwargs["movement"]
         spawner: BallIdleSpawner = kwargs["spawner"]
 
+        def select_passing_target(context: RobotContext):
+        # choose (striker)
+            if context.is_yellow:
+                return min(context.teammates.values(), key=lambda t: t.position[0])
+            else:
+                return max(context.teammates.values(), key=lambda t: t.position[0])
+
         # Get first teammate position (for two-robot passing)
         if not context.teammates:
             return
 
-        passer_pos = list(context.teammates.values())[0].position
+        passer_p = select_passing_target(context)
+        passer_pos = passer_p.position
 
         ball_speed = np.linalg.norm(context.ball.velocity)
 
@@ -611,3 +643,47 @@ class ReceivingStateMachine(StateMachine[RobotContext]):
 
         super().__init__(initial_state=positioning)
         self.register_state(intercepting)
+
+
+def striker_Zone(context, spawner, target):
+    x, y = float(target[0]), float(target[1])
+
+    # field clamp
+    x = max(spawner.field_x_min + STRIKER_MARGIN,
+            min(spawner.field_x_max - STRIKER_MARGIN, x))
+    y = max(spawner.field_y_min + STRIKER_MARGIN,
+            min(spawner.field_y_max - STRIKER_MARGIN, y))
+
+    # attacking half restriction
+    if context.is_yellow:
+        x = min(x, -STRIKER_X_LIMIT)
+    else:
+        x = max(x, +STRIKER_X_LIMIT)
+
+    return np.array([x, y], dtype=float)
+
+
+class StrikerPositioningState(PositioningState):
+    def execute(self, context, **kwargs):
+        spawner = kwargs["spawner"]
+
+        # decide target
+        target = super().compute_target(context, **kwargs)
+
+        # striker constraints
+        target = striker_Zone(context, spawner, target)
+        target = np.array(avoid_defense_area_target(tuple(target)))
+
+        return target
+    
+
+class StrikerStateMachine(StateMachine):
+    def __init__(self):
+        positioning = StrikerPositioningState()
+        algning = AligningWithTargetState()
+        kicking = KickingState()
+
+        super().__init__(initial_state=positioning)
+        self.register_state(algning)
+        self.register_state(kicking)
+    
