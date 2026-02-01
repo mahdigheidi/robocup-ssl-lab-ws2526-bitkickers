@@ -1,11 +1,10 @@
 """Shared ball handling state machines - reusable across roles."""
-from multiprocessing import context
 import numpy as np
 from typing import Optional, Type, Any
 from TeamControl.utils.state_machine import State, StateMachine
 from TeamControl.network.ssl_sockets import grSimSender
 from TeamControl.network.robot_command import RobotCommand
-from TeamControl.robot.context import RobotContext
+from TeamControl.robot.context import RobotContext, EntityState
 from TeamControl.ball.ball_idle_spawner import BallIdleSpawner
 from TeamControl.obstacles.rules import avoid_defense_area_target
 
@@ -48,6 +47,10 @@ SHADOW_WIDTH = 300  # mm - how wide the "blocked" zone is around the passing lan
 CENTER_BIAS_STRENGTH = 0.3  # How strongly to pull toward center (0-1)
 SEPARATION_BIAS_STRENGTH = 0.3  # How strongly to push away from teammate (0-1)
 MIN_SEPARATION_DISTANCE = 2000  # mm - ideal minimum distance between robots
+
+# Shooting at goal
+SHOOTING_ALIGNMENT_THRESHOLD = 0.15  # radians (~8.6°) - looser than passing
+SHOOTING_KICK_POWER = 10  # Maximum power
 
 
 
@@ -686,4 +689,170 @@ class StrikerStateMachine(StateMachine):
         super().__init__(initial_state=positioning)
         self.register_state(algning)
         self.register_state(kicking)
+
+
+# =============================================================================
+# Shooting at Goal States
+# =============================================================================
+
+
+def find_goal_target(context: RobotContext, spawner: BallIdleSpawner) -> np.ndarray:
+    """Find best target point in opponent's goal, avoiding goalie."""
+    # Determine opponent goal x-position
+    goal_x = -spawner.goal_line_x if context.is_yellow else spawner.goal_line_x
+    goal_half_width = spawner.goal_width / 2
+
+    # Find opponent goalie (closest opponent to their goal line)
+    goalie = None
+    if context.opponents:
+        goalie = min(
+            context.opponents.values(),
+            key=lambda o: abs(o.position[0] - goal_x)
+        )
+
+    # Aim away from goalie
+    if goalie is not None:
+        goalie_y = goalie.position[1]
+        # Aim at opposite side of goal from goalie
+        if goalie_y > 0:
+            target_y = -goal_half_width * 0.6  # Lower part of goal
+        else:
+            target_y = goal_half_width * 0.6   # Upper part of goal
+    else:
+        target_y = 0  # Center if no goalie
+
+    return np.array([goal_x, target_y])
+
+
+class AligningWithGoalState(State[RobotContext]):
+    """Align with goal to prepare for shot."""
+
+    def handle_transition(self, context: RobotContext) -> Optional[Type[State[RobotContext]]]:
+        if not context.has_possession:
+            return ApproachingBallForShotState
+
+        # Get goal target
+        # Note: spawner is not available in handle_transition, so we use a simpler check
+        goal_x = -4500 if context.is_yellow else 4500  # Approximate goal line
+        
+        my_orientation = context.my_state.position[2]
+        dx = goal_x - context.my_state.position[0]
+        dy = 0 - context.my_state.position[1]  # Aim at center for transition check
+        angle_to_goal = np.arctan2(dy, dx)
+
+        angle_diff = angle_to_goal - my_orientation
+        angle_diff = np.arctan2(np.sin(angle_diff), np.cos(angle_diff))
+
+        if abs(angle_diff) < SHOOTING_ALIGNMENT_THRESHOLD:
+            return ShootingState
+
+        return None
+
+    def execute(self, context: RobotContext, **kwargs: Any) -> None:
+        sender: grSimSender = kwargs["sender"]
+        movement = kwargs["movement"]
+        spawner: BallIdleSpawner = kwargs["spawner"]
+
+        target_pos = find_goal_target(context, spawner)
+
+        w = movement.face_towards(
+            robot_pos=context.my_state.position,
+            target=target_pos,
+            max_angular_acceleration=ALIGN_ANGULAR_ACCELERATION,
+        )
+
+        sender.send_command(
+            RobotCommand(robot_id=context.robot_id, vx=0, vy=0, w=w, kick=0, dribble=1)
+        )
+
+
+class ShootingState(State[RobotContext]):
+    """Execute shot at goal with maximum power."""
+
+    def handle_transition(self, context: RobotContext) -> Optional[Type[State[RobotContext]]]:
+        if not context.has_possession:
+            return ChasingBallForShotState
+        return None
+
+    def execute(self, context: RobotContext, **kwargs: Any) -> None:
+        sender: grSimSender = kwargs["sender"]
+
+        sender.send_command(
+            RobotCommand(
+                robot_id=context.robot_id,
+                vx=0, vy=0, w=0,
+                kick=SHOOTING_KICK_POWER,
+                dribble=0
+            )
+        )
+
+
+class ChasingBallForShotState(State[RobotContext]):
+    """Fast approach to ball for shooting."""
+
+    def handle_transition(self, context: RobotContext) -> Optional[Type[State[RobotContext]]]:
+        ball_dist = distance(context.ball.position, context.my_state.position)
+        if ball_dist < CHASE_TO_APPROACH_DISTANCE:
+            return ApproachingBallForShotState
+        return None
+
+    def execute(self, context: RobotContext, **kwargs: Any) -> None:
+        sender: grSimSender = kwargs["sender"]
+        movement = kwargs["movement"]
+
+        vx, vy = movement.go_to(
+            context.my_state.position,
+            context.ball.position,
+            kicker_to_target=True,
+            max_acceleration=CHASE_MAX_ACCELERATION,
+            max_speed=CHASE_MAX_SPEED,
+        )
+        w = movement.face_towards(robot_pos=context.my_state.position, target=context.ball.position)
+        sender.send_command(
+            RobotCommand(robot_id=context.robot_id, vx=vx, vy=vy, w=w, kick=0, dribble=1)
+        )
+
+
+class ApproachingBallForShotState(State[RobotContext]):
+    """Gentle approach when close to ball for shooting."""
+
+    def handle_transition(self, context: RobotContext) -> Optional[Type[State[RobotContext]]]:
+        ball_dist = distance(context.ball.position, context.my_state.position)
+
+        if ball_dist > APPROACH_TO_CHASE_DISTANCE:
+            return ChasingBallForShotState
+        if context.has_possession:
+            return AligningWithGoalState
+        return None
+
+    def execute(self, context: RobotContext, **kwargs: Any) -> None:
+        sender: grSimSender = kwargs["sender"]
+        movement = kwargs["movement"]
+
+        vx, vy = movement.go_to(
+            context.my_state.position,
+            context.ball.position,
+            kicker_to_target=True,
+            max_acceleration=APPROACH_MAX_ACCELERATION,
+            max_speed=APPROACH_MAX_SPEED,
+        )
+        w = movement.face_towards(robot_pos=context.my_state.position, target=context.ball.position)
+        sender.send_command(
+            RobotCommand(robot_id=context.robot_id, vx=vx, vy=vy, w=w, kick=0, dribble=1)
+        )
+
+
+class ShootingStateMachine(StateMachine[RobotContext]):
+    """State machine for shooting at goal."""
+
+    def __init__(self):
+        chasing = ChasingBallForShotState()
+        approaching = ApproachingBallForShotState()
+        aligning = AligningWithGoalState()
+        shooting = ShootingState()
+
+        super().__init__(initial_state=aligning)
+        self.register_state(chasing)
+        self.register_state(approaching)
+        self.register_state(shooting)
     

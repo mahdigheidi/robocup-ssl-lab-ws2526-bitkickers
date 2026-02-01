@@ -16,7 +16,7 @@ from TeamControl.robot import enable_logging
 
 from TeamControl.robot.roles.striker import Striker
 from TeamControl.robot.roles.support import Support
-from TeamControl.robot.roles.Defender import Defender
+from TeamControl.robot.roles.defender import Defender
 from TeamControl.robot.roles.goalie import Goalkeeper
 
 from TeamControl.robot.roles.passer import Passer
@@ -136,7 +136,7 @@ def team_control_process(wm: WorldModel):
     # Initial phases
  
     goalie.switch_phase(Goalkeeper.Phase.ACTIVE)
-    defender.switch_phase(Defender.Phase.HOLD)
+    defender.switch_phase(Defender.Phase.CHASING)
     striker.switch_phase(Striker.Phase.RECEIVING)
     support.switch_phase(Support.Phase.CHASING)
     #blue_striker.switch_phase(Striker.Phase.RECEIVING)
