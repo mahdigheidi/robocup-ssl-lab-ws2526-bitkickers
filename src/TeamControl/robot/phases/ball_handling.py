@@ -111,7 +111,7 @@ class ApproachingBallState(State[RobotContext]):
 
         vx, vy = movement.go_to(
             context.my_state.position,
-            context.ball.position,
+            target=context.ball.position,
             kicker_to_target=True,
             max_acceleration=APPROACH_MAX_ACCELERATION,
             max_speed=APPROACH_MAX_SPEED,
@@ -199,10 +199,9 @@ class AligningWithTargetState(State[RobotContext]):
             else:
                 return max(context.teammates.values(), key=lambda t: t.position[0])
 
-        # Get first teammate as passing target
+       
         if not context.teammates:
             return
-
         target = select_passing_target(context)
         target_pos = target.position
 
@@ -571,6 +570,8 @@ class PositioningState(State[RobotContext]):
         )
 
 
+
+
 class InterceptingState(State[RobotContext]):
     """Intercept incoming ball."""
 
@@ -633,6 +634,84 @@ class InterceptingState(State[RobotContext]):
             RobotCommand(robot_id=context.robot_id, vx=vx, vy=vy, w=w, kick=0, dribble=1)
         )
 
+def pick_open_goal(
+    context: RobotContext,
+    spawner,
+) -> tuple[np.ndarray | None, np.ndarray | None]:
+    """
+    Returns:
+      (goal_target, reposition_target)
+    - goal_target: where to shoot (x=±4500, y in [-500,500])
+    - reposition_target: where to move if blocked
+    """
+
+    ball_xy = context.ball.position[:2]
+    gx = -4500.0 if context.is_yellow else 4500.0
+
+    # Try multiple goal y points
+    for y in np.linspace(-500, 500, 7):
+        goal_target = np.array([gx, y], dtype=float)
+
+        opponent = list(context.opponents.values())[0] if context.opponents else None
+
+        reposition = calculate_receiver_position(
+            receiver_pos=ball_xy,
+            passer_pos=goal_target,        # ← goal acts like "passer"
+            opponent_state=opponent,
+            field_x_min=spawner.field_x_min,
+            field_x_max=spawner.field_x_max,
+            field_y_min=spawner.field_y_min,
+            field_y_max=spawner.field_y_max,
+        )
+
+        # None means NOT BLOCKED → shoot
+        if reposition is None:
+            return goal_target, None
+
+    # All lanes blocked → reposition based on the best attempt
+    # reuse last reposition suggestion
+    return None, reposition
+
+
+
+class StrikerPositioningState(PositioningState):
+    def execute(self, context: RobotContext, **kwargs):
+        sender = kwargs["sender"]
+        movement = kwargs["movement"]
+        spawner = kwargs["spawner"]
+
+        ball_xy = context.ball.position[:2]
+        robot_xy = context.my_state.position[:2]
+
+        if not context.has_possession:
+            return #super().execute(context, **kwargs)
+
+        # -------- STRIKER SHOOT DECISION --------
+        goal_target, reposition = pick_open_goal(context, spawner)
+
+        # BLOCKED → reposition laterally
+        if goal_target is None:
+            vx, vy = movement.go_to(
+                context.my_state.position,
+                reposition,
+                max_speed=1500
+            )
+        
+            w = movement.face_towards(context.my_state.position, reposition)
+            sender.send_command(
+                RobotCommand(
+                    context.robot_id,
+                    vx, vy, w,
+                    kick=0, dribble=1
+                )
+            )
+            return
+
+        # CLEAR → let Aligning/Kicking handle the shot
+        return super().execute(context, **kwargs)
+
+
+
 
 class ReceivingStateMachine(StateMachine[RobotContext]):
     """State machine for receiving passes."""
@@ -643,39 +722,6 @@ class ReceivingStateMachine(StateMachine[RobotContext]):
 
         super().__init__(initial_state=positioning)
         self.register_state(intercepting)
-
-
-def striker_Zone(context, spawner, target):
-    x, y = float(target[0]), float(target[1])
-
-    # field clamp
-    x = max(spawner.field_x_min + STRIKER_MARGIN,
-            min(spawner.field_x_max - STRIKER_MARGIN, x))
-    y = max(spawner.field_y_min + STRIKER_MARGIN,
-            min(spawner.field_y_max - STRIKER_MARGIN, y))
-
-    # attacking half restriction
-    if context.is_yellow:
-        x = min(x, -STRIKER_X_LIMIT)
-    else:
-        x = max(x, +STRIKER_X_LIMIT)
-
-    return np.array([x, y], dtype=float)
-
-
-class StrikerPositioningState(PositioningState):
-    def execute(self, context, **kwargs):
-        spawner = kwargs["spawner"]
-
-        # decide target
-        target = super().compute_target(context, **kwargs)
-
-        # striker constraints
-        target = striker_Zone(context, spawner, target)
-        target = np.array(avoid_defense_area_target(tuple(target)))
-
-        return target
-    
 
 class StrikerStateMachine(StateMachine):
     def __init__(self):

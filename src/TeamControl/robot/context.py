@@ -3,6 +3,8 @@
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 import numpy as np
+from typing import Optional
+
 
 if TYPE_CHECKING:
     from TeamControl.world.model import WorldModel
@@ -52,6 +54,7 @@ class RobotContext:
     teammates: dict[int, EntityState]  # Other robots on my team (excluding self)
     opponents: dict[int, EntityState]  # All robots on opposing team
     has_possession: bool
+    preferred_teammate: Optional[int] = None
 
     def __post_init__(self):
         """Validate shapes and constraints."""

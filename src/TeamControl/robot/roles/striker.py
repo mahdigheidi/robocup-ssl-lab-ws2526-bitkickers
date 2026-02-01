@@ -3,29 +3,46 @@
 from enum import Enum, auto
 import time
 import logging
-from TeamControl.SSL.grSim.passing_process import check_possession
+from TeamControl.obstacles.helpers import RoleArea, check_possession
+
 from TeamControl.robot import context
+from TeamControl.robot.phases.ball_handling import is_path_blocked
 from TeamControl.robot.roles import goalie
 import numpy as np
+
 
 from TeamControl.robot.role import Role
 from TeamControl.robot.context import RobotContext
 from TeamControl.utils.state_machine import StateMachine
 
 from TeamControl.robot.phases.basic import (
+    HoldPositionFaceBallStateMachine,
     InterceptionStateMachine,
+    ShadowBallStateMachine
 )
+
 
 from TeamControl.robot.phases import (
     ReceivingStateMachine,
     ChasingBallStateMachine,
     StrikerStateMachine,
+    KickToGoalStateMachine,
 )
 
 
 BALL_SLOW_THRESHOLD = 500
 BALL_DIRECTION_DOT_THRESHOLD = 0.3
 GOALIE_HOLD_TIME = 1.0
+
+STRIKER_AREA = RoleArea(
+    x_min=-4400.0,
+    x_max=-1400.0,
+    y_min=-2900.0,
+    y_max=2900.0,
+    defense_x=-3400.0,      # goal box edge
+    defense_y_half=1100.0,
+)
+
 
 logger = logging.getLogger(__name__)
 
@@ -42,18 +59,22 @@ def log_phase(robot, phase, reason: str):
 class Striker(Role):
 
     class Phase(Enum):
+        HOLD = auto()
+        SHADOW = auto()
         RECEIVING = auto()
         PLAY = auto()
         CHASING = auto()
         INTERCEPT = auto()
+        KICK_TO_GOAL = auto()
 
     def __init__(self, blue_goal= None):
         super().__init__()
+        self._possession_start = None
         self._goalie_hold_start = None
         self.blue_goal = blue_goal
 
     def get_initial_phase(self):
-        return self.Phase.RECEIVING
+        return self.Phase.CHASING
 
     
     def create_phase_machine(self, phase):
@@ -67,29 +88,20 @@ class Striker(Role):
         if phase == self.Phase.CHASING:
             return ChasingBallStateMachine()
 
+        if phase == self.Phase.HOLD:
+            return HoldPositionFaceBallStateMachine(self.home)
+
         if phase == self.Phase.INTERCEPT:
-            return InterceptionStateMachine()
+            return InterceptionStateMachine(STRIKER_AREA)
+        
+        if phase == self.Phase.KICK_TO_GOAL:
+            return KickToGoalStateMachine()
+        if phase == self.Phase.SHADOW:
+            return ShadowBallStateMachine(STRIKER_AREA)
 
         raise ValueError(phase)
     
 
-    def ball_moving_toward_me(self, context: RobotContext) -> bool:
-        ball_pos = context.ball.position
-        ball_vel = context.ball.velocity
-        my_pos = context.my_state.position
-
-        speed = np.linalg.norm(ball_vel)
-        if speed < BALL_SLOW_THRESHOLD:
-            return False
-
-        ball_dir = ball_vel / speed
-        to_me = my_pos[:2] - ball_pos
-        dist = np.linalg.norm(to_me)
-
-        if dist < 1:
-            return False
-
-        return np.dot(ball_dir, to_me / dist) > BALL_DIRECTION_DOT_THRESHOLD
 
     def opp_goalie_has_ball(self, context: RobotContext) -> bool:
         if not context.opponents:
@@ -104,44 +116,59 @@ class Striker(Role):
 
         return check_possession(context.ball.position, goalie.position)
 
+
+
+# ============================================================================
+# Phase Update Logic
+# ============================================================================
     def update_phase(self, robot, context: RobotContext):
+        
+        bx, by = context.ball.position[:2]
+        ball_legal =  STRIKER_AREA.is_point_legal(context, bx, by)
+        
 
-        # EXIT intercept cleanly
-        if robot.current_phase == self.Phase.INTERCEPT:
-            if not self.opp_goalie_has_ball(context):
-                log_phase(robot, self.Phase.RECEIVING, "opponent goalie released ball")
-                return self.Phase.RECEIVING
+        # 5) Default → CHASING
+        if ball_legal:
 
-        has_ball = check_possession(context.ball.position, context.my_state.position)
-        ball_pos = context.ball.position
-        teammate_has_ball = any(
-            check_possession(ball_pos, t.position)
-            for t in context.teammates.values()
-        )
+            if robot.current_phase != self.Phase.CHASING:
+                logger.info("Striker: default → CHASING")
+                robot.switch_phase(self.Phase.CHASING)
+        
+        # 1) We have the ball → PLAY
+        if context.has_possession:
+            if robot.current_phase != self.Phase.KICK_TO_GOAL:
+                logger.info("Striker: has ball → KICK_TO_GOAL")
+                robot.switch_phase(self.Phase.KICK_TO_GOAL)
+            return
+         
 
-        # 1. Goalie hold → intercept
+        # 4) Teammate has ball → RECEIVING
+        if any(check_possession(context.ball.position, t.position)
+               for t in context.teammates.values()):
+            
+            if robot.current_phase != self.Phase.RECEIVING:
+                logger.info("Striker: teammate has ball → RECEIVING")
+
+                robot.switch_phase(self.Phase.RECEIVING)
+            return
+        
+        # 2) Opponent goalie has possession → INTERCEPT
         if self.opp_goalie_has_ball(context):
-            if self._goalie_hold_start is None:
-                self._goalie_hold_start = time.time()
-                #logger.debug(
-                #f"[R{robot.robot_id}] goalie possession detected, starting timer"
-            #)
-            elif time.time() - self._goalie_hold_start > GOALIE_HOLD_TIME:
-                log_phase(robot, self.Phase.INTERCEPT, "opponent goalie holding ball")
-                return self.Phase.INTERCEPT
-        else:
-            self._goalie_hold_start = None
 
-        # 2. have ball
-        if has_ball:
-            log_phase(robot, self.Phase.PLAY, "self has possession")
-            return self.Phase.PLAY
+            if robot.current_phase != self.Phase.INTERCEPT:
+                logger.info("Striker: opponent goalie has ball → INTERCEPT")
 
-        # 3. Teammate has ball
-        if teammate_has_ball:
-            #log_phase(robot, self.Phase.RECEIVING, "teammate has possession")
-            return self.Phase.RECEIVING
+                robot.switch_phase(self.Phase.INTERCEPT)
+            return
 
-        # 5. Otherwise chase
-        #log_phase(robot, self.Phase.CHASING, "no possession, chasing ball")
-        return self.Phase.CHASING
+
+
+         # stable_has_ball = self.stable_has_ball(context)
+        if not ball_legal:
+            if robot.current_phase != self.Phase.SHADOW:
+
+                logger.info("Striker: ball illegal → SHADOW")
+
+            robot.switch_phase(self.Phase.SHADOW)
+            return
+   

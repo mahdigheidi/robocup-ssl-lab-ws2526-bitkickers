@@ -1,53 +1,99 @@
-
-# Basic implementation of mid fielder 
+import logging
 from enum import Enum, auto
-import numpy as np
 
+from TeamControl.robot import context
 from TeamControl.robot.role import Role
-from TeamControl.robot.context import RobotContext, POSSESSION_THRESHOLD
+from TeamControl.robot.context import RobotContext
 from TeamControl.utils.state_machine import StateMachine
 from TeamControl.robot.phases.ball_handling import (
     ChasingBallStateMachine,
-    PassingStateMachine,
+    #PassingStateMachine,
 )
+from TeamControl.robot.phases.basic import (
+    HoldPositionFaceBallStateMachine,
+  
+    KickToGoalStateMachine   , 
+)
+
+logger = logging.getLogger(__name__)
 
 STRIKER_ID = 3
 
+SUPPORT_X_MIN = -1500.0 
+SUPPORT_X_MAX = 1500.0 
+SUPPORT_Y_MIN = -3000.0 
+SUPPORT_Y_MAX = 3000.0
 
-def has_possession(ball_pos, robot_pos):
-    return np.linalg.norm(ball_pos - robot_pos[:2]) < POSSESSION_THRESHOLD
+def inside_zone(context: RobotContext) -> bool:
+    x, y = context.ball.position[:2]
+    return (
+        SUPPORT_X_MIN <= x <= SUPPORT_X_MAX and
+        SUPPORT_Y_MIN <= y <= SUPPORT_Y_MAX
+    )
 
 
 class Support(Role):
     class Phase(Enum):
         CHASING = auto()
-        PASSING = auto()
+      # PASSING = auto()
+        HOLD = auto()
+        KICK_TO_GOAL = auto()
 
+
+    # --------------------------------------------------
+    # Initial phase
+    # --------------------------------------------------
     def get_initial_phase(self):
         return self.Phase.CHASING
 
-    def create_phase_machine(self, phase):
+    # --------------------------------------------------
+    # Phase → StateMachine mapping
+    # --------------------------------------------------
+    def create_phase_machine(self, phase: Phase) -> StateMachine[RobotContext]:
+        #logger.info(f"[SUPPORT] Creating phase machine: {phase.name}")
+
         if phase == self.Phase.CHASING:
             return ChasingBallStateMachine()
-        if phase == self.Phase.PASSING:
-            return PassingStateMachine()
-        raise ValueError(phase)
 
+        #if phase == self.Phase.PASSING:
+           # return PassingStateMachine()
+
+        if phase == self.Phase.KICK_TO_GOAL:
+            return KickToGoalStateMachine()
+        
+        if phase == self.Phase.HOLD:
+            return HoldPositionFaceBallStateMachine(home=(0.0, 0.0))
+  
+        raise ValueError(f"Unknown phase: {phase}")
+
+    # --------------------------------------------------
+    # Phase transitions
     def update_phase(self, robot, context: RobotContext):
+        # -------- OUTSIDE ZONE CHECK --------
+        inside = inside_zone(context)
+        ball_inside = inside_zone(context)
 
-        # ================= CHASING =================
+        if not ball_inside:
+            if robot.current_phase != self.Phase.HOLD:
+               
+                robot.switch_phase(self.Phase.HOLD)
+            return
+
+        if robot.current_phase == self.Phase.HOLD:
+
+            robot.switch_phase(self.Phase.CHASING)
+            return
+
+        # -------- CHASING --------
         if robot.current_phase == self.Phase.CHASING:
             if context.has_possession:
-                # Inject ONLY striker as target
-                if STRIKER_ID in context.teammates:
-                    context.teammates = {
-                        STRIKER_ID: context.teammates[STRIKER_ID]
-                    }
-                robot.switch_phase(self.Phase.PASSING)
+                
+                robot.switch_phase(self.Phase.KICK_TO_GOAL)
                 return
 
-        # ================= PASSING =================
-        if robot.current_phase == self.Phase.PASSING:
+        # -------- KICK TO GOAL --------
+        elif robot.current_phase == self.Phase.KICK_TO_GOAL:
             if not context.has_possession:
+                
                 robot.switch_phase(self.Phase.CHASING)
                 return

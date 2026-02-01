@@ -1,6 +1,9 @@
 import math
 from shapely.geometry import Point, Polygon
+from TeamControl.robot.context import RobotContext, WorldState, POSSESSION_THRESHOLD
+import numpy as np
 
+from dataclasses import dataclass
 # ----------------------------------------------------
 # ------------ Constants and Polygons ----------------
 # ----------------------------------------------------
@@ -123,3 +126,106 @@ def check_stop_conditions(agent_pos, target_pos, static_robots, dynamic_robots, 
 
 def ball_in_defense_area(ball_pos):
     return Point(ball_pos).within(Polygon(DEFENSE_AREA_POLYGON))
+
+
+def check_possession(
+    ball_pos: np.ndarray, robot_pos: np.ndarray, threshold: float = POSSESSION_THRESHOLD
+) -> bool:
+    """Check if robot has possession of the ball based on distance threshold."""
+    dist = float(np.linalg.norm(ball_pos - robot_pos[:2]))
+    return dist < threshold
+
+
+# ----------------------------------------------------
+# ---------------- ROLE AREA SYSTEM ------------------
+# ----------------------------------------------------
+
+@dataclass(frozen=True)
+class RoleArea:
+    x_min: float
+    x_max: float
+    y_min: float
+    y_max: float
+    defense_x: float | None = None
+    defense_y_half: float | None = None
+
+    def is_point_legal(self, context, x: float, y: float) -> bool:
+        if not (self.x_min <= x <= self.x_max and self.y_min <= y <= self.y_max):
+            return False
+
+        if self.defense_x is not None and self.defense_y_half is not None:
+            if context.is_yellow:
+                in_defense = x >= self.defense_x and abs(y) <= self.defense_y_half
+            else:
+                in_defense = x <= self.defense_x and abs(y) <= self.defense_y_half
+
+            if in_defense:
+                return False
+
+        return True
+
+
+    def project_to_legal_area(
+        self,
+        context,
+        x: float,
+        y: float,
+    ) -> np.ndarray:
+        """
+        Projects (x, y) into the nearest legal point inside the role area.
+        """
+
+        # 1) Clamp to rectangle
+        cx = np.clip(x, self.x_min, self.x_max)
+        cy = np.clip(y, self.y_min, self.y_max)
+
+        # 2) If legal now → done
+        if self.is_point_legal(context, cx, cy):
+            return np.array([cx, cy], dtype=float)
+
+        # 3) Push out of defense zone if needed
+        if self.defense_x is not None and self.defense_y_half is not None:
+            cy = np.sign(cy) * self.defense_y_half if cy != 0 else self.defense_y_half
+
+        return np.array([cx, cy], dtype=float)
+
+    """
+
+def ball_is_striker_legal(context: RobotContext, x: float = None, y: float = None) -> bool:
+    bx, by = context.ball.position[:2]
+
+    if x is not None and y is not None:
+        bx, by = x, y
+
+    # striker zone
+    in_zone = (
+        STRIKER_X_MIN <= bx <= STRIKER_X_MAX and
+        STRIKER_Y_MIN <= by <= STRIKER_Y_MAX
+    )
+    goal_x = -3400.0 if context.is_yellow else 3400.0
+    in_defense = (
+        (bx >= goal_x if context.is_yellow else bx <= goal_x)
+        and abs(by) <= 1100.0
+    )
+
+    return in_zone and not in_defense
+
+def project_to_striker_legal(context: RobotContext, x: float, y: float) -> np.ndarray:
+   
+    Projects a point into the nearest legal striker position.
+   
+
+    # Clamp to striker rectangle
+    cx = np.clip(x, STRIKER_X_MIN, STRIKER_X_MAX)
+    cy = np.clip(y, STRIKER_Y_MIN, STRIKER_Y_MAX)
+
+    # If legal after clamp → done
+    if ball_is_striker_legal(context, cx, cy):
+        return np.array([cx, cy])
+
+    # Otherwise, push out of defense area along Y
+    defense_y = 1100.0
+    cy = np.sign(cy) * defense_y if cy != 0 else defense_y
+
+    return np.array([cx, cy])
+"""

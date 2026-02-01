@@ -25,7 +25,7 @@ class Goalkeeper(Role):
         return self.Phase.ACTIVE
 
     def create_phase_machine(self, phase: Phase) -> StateMachine[RobotContext]:
-        logger.info(f"[GOALIE] Creating phase machine: {phase.name}")
+        #logger.info(f"[GOALIE] Creating phase machine: {phase.name}")
 
         if phase == self.Phase.ACTIVE:
             return GoalieStateMachine()
@@ -53,9 +53,9 @@ class Goalkeeper(Role):
         #ACTIVE 
         if robot.current_phase == self.Phase.ACTIVE:
             if y_defense:
-                logger.info(
-                    f"[GOALIE {robot.robot_id}] ACTIVE → CHASING (ball in own defense)"
-                )
+                #logger.info(
+                #    f"[GOALIE {robot.robot_id}] ACTIVE → CHASING (ball in own defense)"
+                #)
                 robot.switch_phase(self.Phase.CHASING)
                 return
 
@@ -63,26 +63,26 @@ class Goalkeeper(Role):
         elif robot.current_phase == self.Phase.CHASING:
 
             if context.has_possession:
-                logger.info(
-                    f"[GOALIE {robot.robot_id}] CHASING → PASSING (has possession)"
-                )
+                #logger.info(
+                #    f"[GOALIE {robot.robot_id}] CHASING → PASSING (has possession)"
+                #)
                 context.teammates = ordered_pass_targets(context)
                 robot.switch_phase(self.Phase.PASSING)
                 return
 
             if not y_defense:
-                logger.info(
-                    f"[GOALIE {robot.robot_id}] CHASING → ACTIVE (ball left defense)"
-                )
+                #logger.info(
+                #    f"[GOALIE {robot.robot_id}] CHASING → ACTIVE (ball left defense)"
+                #)
                 robot.switch_phase(self.Phase.ACTIVE)
                 return
 
         # PASSING
         elif robot.current_phase == self.Phase.PASSING:
             if not context.has_possession:
-                logger.info(
-                    f"[GOALIE {robot.robot_id}] PASSING → ACTIVE (lost possession)"
-                )
+                #logger.info(
+                #    f"[GOALIE {robot.robot_id}] PASSING → ACTIVE (lost possession)"
+                #)
                 robot.switch_phase(self.Phase.ACTIVE)
                 return
 
@@ -100,5 +100,5 @@ def ordered_pass_targets(context: RobotContext):
         if rid in context.teammates:
             ordered[rid] = context.teammates[rid]
 
-    logger.info(f"[GOALIE] Ordered pass targets: {list(ordered.keys())}")
+    #logger.info(f"[GOALIE] Ordered pass targets: {list(ordered.keys())}")
     return ordered

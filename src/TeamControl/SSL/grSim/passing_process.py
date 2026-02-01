@@ -9,15 +9,7 @@ from TeamControl.robot.robot import Robot
 from TeamControl.robot.roles import Passer
 from TeamControl.robot.context import WorldState, POSSESSION_THRESHOLD
 from TeamControl.robot import enable_logging, AnsiColors
-
-
-def check_possession(
-    ball_pos: np.ndarray, robot_pos: np.ndarray, threshold: float = POSSESSION_THRESHOLD
-) -> bool:
-    """Check if robot has possession of the ball based on distance threshold."""
-    dist = float(np.linalg.norm(ball_pos - robot_pos[:2]))
-    return dist < threshold
-
+from TeamControl.obstacles.helpers import check_possession
 
 # --------------------------
 # Ball idle spawner parameters
