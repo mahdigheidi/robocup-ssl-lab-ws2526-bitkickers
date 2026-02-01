@@ -2,14 +2,16 @@
 
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeVar, Generic
 
 if TYPE_CHECKING:
     from TeamControl.utils.state_machine import StateMachine
     from TeamControl.robot.context import RobotContext
 
+PhaseT = TypeVar("PhaseT", bound=Enum)
 
-class Role(ABC):
+
+class Role(ABC, Generic[PhaseT]):
     """Abstract base class for robot strategic roles.
     
     Each role (Attacker, Goalkeeper, etc.) extends this class and defines:
@@ -19,12 +21,12 @@ class Role(ABC):
     """
 
     @abstractmethod
-    def get_initial_phase(self) -> Enum:
+    def get_initial_phase(self) -> PhaseT:
         """Return the starting phase for this role."""
         pass
 
     @abstractmethod
-    def create_phase_machine(self, phase: Enum) -> "StateMachine[RobotContext]":
+    def create_phase_machine(self, phase: PhaseT) -> "StateMachine[RobotContext]":
         """Create state machine for the given phase.
         
         Args:

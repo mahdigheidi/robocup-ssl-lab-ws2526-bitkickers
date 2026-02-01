@@ -5,15 +5,13 @@ from TeamControl.robot.phases.ball_handling import (
     PassingStateMachine,
     ReceivingStateMachine,
     StrikerStateMachine,
-
-
+    ShootingStateMachine,
 )
 
 from TeamControl.robot.phases.basic import (
     HoldPositionFaceBallStateMachine,
     InterceptionStateMachine,
     KickToGoalStateMachine,
-
     SupportBehindBallStateMachine,
     GoalieStateMachine,
 )
@@ -24,6 +22,7 @@ __all__ = [
     "PassingStateMachine",
     "ReceivingStateMachine",
     "StrikerStateMachine",
+    "ShootingStateMachine",
 
     # Basic roles
     "HoldPositionFaceBallStateMachine",
