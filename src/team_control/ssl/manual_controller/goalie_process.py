@@ -4,12 +4,10 @@ import traceback
 
 from team_control.network.sender import GrSimSender
 from team_control.network.robot_command import RobotCommand
-from team_control.network.send_ball_grsim import BallSender
 from team_control.network.ball_spawner import BallSpawner
 from team_control.robot.movement import RobotMovement
 from team_control.ssl.datasets.data_generator import DataWriter
 from team_control.world.model import WorldModel
-from team_control.ssl.rl.env import get_my_normalized_state
 
 # --------------------------
 # Ball spawner parameters
@@ -20,7 +18,7 @@ GOAL_PROBABILITY = 0.75  # probability next ball goes toward goal (0..1)
 
 def goalie_process(wm: WorldModel, division_name, sim_ip, cmd_listen_port, robot_id, is_team_yellow) -> None:
     # Initialize grSim command sender
-    data_writer = DataWriter(f"{'yellow' if is_team_yellow else 'blue'}_goalie")
+    # data_writer = DataWriter(f"{'yellow' if is_team_yellow else 'blue'}_goalie")
     sender = GrSimSender(ip=sim_ip, port=cmd_listen_port, is_yellow=is_team_yellow)
     # writer = DataWriter('goalie')
 
@@ -65,12 +63,9 @@ def goalie_process(wm: WorldModel, division_name, sim_ip, cmd_listen_port, robot
                     robot_vel[2] *= 1000
                     ball_vel = [(ball_pos[i] - prev_ball_pos[i]) * 0.012 for i in range(len(ball_pos))]
 
-                if robot_obj is not None:
-                    robot_state, ball_state, teammates_state, opponents_state = get_my_normalized_state(robot_obj, ball_obj, teammates_obj, opponents_obj, is_team_yellow)
-                    data_writer.write(robot_state, ball_state, teammates_state, opponents_state, action)
                 robot_obj, ball_obj, teammates_obj, opponents_obj = wm.get_robot_context(robot_id, is_team_yellow)
                 prev_robot_pos = robot_pos
-                robot_pos = robot_obj.position if robot_obj is not None else(goal_center_x, 0)
+                robot_pos = robot_obj.position if robot_obj is not None else (goal_center_x, 0)
                 prev_ball_pos = ball_pos
                 ball_pos = ball_obj.position
 
@@ -217,4 +212,4 @@ def goalie_process(wm: WorldModel, division_name, sim_ip, cmd_listen_port, robot
         #     ball_sender.send_ball_to_grsim(x, y, vx, vy)
         #     prev_ball_pos = ball_pos
         #     ball_pos = (x, y)
-    data_writer.close()
+    # data_writer.close()

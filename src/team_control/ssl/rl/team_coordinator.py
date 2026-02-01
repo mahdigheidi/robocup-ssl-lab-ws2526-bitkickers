@@ -1,1 +1,0 @@
-# its a process that will train the models.

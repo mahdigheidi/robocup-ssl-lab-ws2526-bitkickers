@@ -12,73 +12,13 @@ from team_control.world.model_manager import WorldModelManager
 from team_control.world.model import WorldModel
 from team_control.world.model_runner import wm_runner
 from team_control.ssl.rl.encoder import Encoder
-from team_control.ssl.rl.env import FootballEnv
+from team_control.ssl.rl.env import GrSimEnv
 from team_control.ssl.rl.referee import Referee, referee_worker
 from team_control.ssl.rl.field import Field
+from team_control.ssl.manual_controller.goalie_process import goalie_process
 
 
-# ============================================================
-# MAPPO Policy (Shared actor + Centralized critic) per team
-# So that means we have a mappo policy for blue and one for yellow
-# ============================================================
-class MAPPOPolicy(nn.Module):
-    def __init__(self, encoder, num_agents, hidden_size=256):
-        super().__init__()
-        # Team information
-        self.num_agents = num_agents
-        self.team_spirit = 0.7
-
-        self.encoder = encoder
-        self.lstm_layers = 3
-        self.hidden_size = hidden_size
-
-        self.lstm = nn.LSTM(
-            256,
-            hidden_size,
-            num_layers=self.lstm_layers,
-            batch_first=True,
-        )
-
-        # Actor heads (shared)
-        # Mean head for 5D action
-        self.mu_head = nn.Linear(hidden_size, 5)
-
-        # Log standard deviation (one parameter per action dimension)
-        self.log_std = nn.Parameter(torch.zeros(5))
-
-        # Centralized critic
-        self.central_value = nn.Sequential(
-            nn.Linear(hidden_size * num_agents, 512),
-            nn.ReLU(),
-            nn.Linear(512, 1)
-        )
-
-    # One hidden state per agent
-    def init_hidden(self, device):
-        # h = torch.zeros(1, self.num_agents, self.hidden_size, device=device)
-        h = torch.zeros(self.lstm_layers, 1, self.hidden_size, device=device)
-        c = torch.zeros(self.lstm_layers, 1, self.hidden_size, device=device)
-        return (h, c)
-
-    def actor_forward(self, robot, ball, team, opp, hidden_state):
-        # encoder expects [batch, features], add batch dim if missing
-        emb = self.encoder(robot, ball, team, opp).unsqueeze(1)
-        out, next_hidden = self.lstm(emb, hidden_state)
-        h = out.squeeze(1)
-
-        mu = self.mu_head(h)  # Bound actions to [-1, 1]
-        std = torch.exp(self.log_std)
-        return mu, std, next_hidden, h
-
-    def critic_forward(self, all_hidden_states):
-        # all_hidden_states: [batch, num_agents * hidden_size]
-        return self.central_value(all_hidden_states)
-
-
-# ============================================================
-# Action sampling
-# ============================================================
-def sample_action(mu, std):
+def _sample_action(mu, std):
     dist = Normal(mu, std)
     action = dist.sample()
     log_prob = dist.log_prob(action).sum(dim=-1, keepdim=True)
@@ -86,47 +26,106 @@ def sample_action(mu, std):
     return action, log_prob, entropy
 
 
-def pack_transition(agent_id, state, action, logp, reward, done, hidden, value):
-    # detach hidden states
-    if hidden is not None:
-        h, c = hidden
-        hidden = (h.detach().cpu(), c.detach().cpu())
-    # detach value
-    if torch.is_tensor(value):
-        value = value.detach().cpu()
-    return {
-        "agent_id": agent_id,
-        "state": state,
-        "action": action.detach().cpu(),
-        "logp": logp.detach().cpu(),
-        "reward": float(reward),
-        "done": bool(done),
-        "hidden": hidden,
-        "value": value
-    }
+class Actor(nn.Module):
+    def __init__(self):
+        super().__init__()
+        # Relative distance of the ego robot to each of the Ball, YGoalie, YP1, YP2, YP3, BGoalie, BP1, BP2, BP3
+        self.memory = nn.LSTM(22, 256, num_layers=1)
+        self.backbone = nn.Sequential(
+            nn.Linear(256, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
+            nn.ReLU(),
+            nn.Linear(256, 128),
+        )
+        self.mu_head = nn.Linear(128, 5)
+        self.log_std = nn.Parameter(torch.zeros(5))
+
+    def init_hidden(self):
+        # shape = (sequence_length, ...)
+        h = torch.zeros(1, 1, 256)
+        c = torch.zeros(1, 1, 256)
+        return (h, c)
+
+    def forward(self, observations, hidden_obs_agents):
+        actions = []
+        log_probs = []
+        entropies = []
+        next_hidden_obs_agents = []
+
+        for i in range(6):
+            observation_embedding, next_hidden_obs = self.memory(observations[i].unsqueeze(0).unsqueeze(0), hidden_obs_agents[i])
+            x = self.backbone(observation_embedding)
+            mu = self.mu_head(x)
+            std = torch.exp(self.log_std)
+            action, log_prob, entropy = _sample_action(mu, std)
+            actions.append(action)
+            log_probs.append(log_prob)
+            entropies.append(entropy)
+            next_hidden_obs_agents.append(next_hidden_obs)
+        actions = torch.cat(actions)
+        log_probs = torch.cat(log_probs)
+        entropies = torch.cat(entropies)
+
+        return actions, log_probs, entropies, next_hidden_obs_agents
+
+
+class Critic(nn.Module):
+    def __init__(self):
+        super().__init__()
+        # input is game state --> Ball (x, y) + 8 Agents (x, y, sin, cos) = 2 + 8 * 4 = 34
+        self.memory = nn.LSTM(34, 256, num_layers=1, batch_first=True)
+        self.q = nn.Sequential(
+            nn.Linear(256, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
+            nn.ReLU(),
+            nn.Linear(256, 1),
+        )
+
+    def init_hidden(self):
+        # shape = (batch_size=1, sequence_length, hidden_size)
+        h = torch.zeros(1, 1, 256)
+        c = torch.zeros(1, 1, 256)
+        return (h, c)
+
+    def forward(self, game_state, hidden_game_state):
+        game_embedding, next_hidden_game = self.memory(game_state.unsqueeze(0).unsqueeze(0), hidden_game_state)
+        value = self.q(game_embedding)
+        return value, game_embedding, next_hidden_game
 
 
 # ============================================================
 # MAPPO Rollout Buffer
 # ============================================================
 class MAPPORolloutBuffer:
-    def __init__(self, num_agents):
-        self.logps = [[] for _ in range(num_agents)]
+    def __init__(self):
+        self.states = []
+        self.observations = []
+        self.hiddens_game = []
+        self.hiddens_agents = []
         self.rewards = []
         self.dones = []
         self.values = []
+        self.logps = []
+        self.entropies = []
+
+    def add(self, game_state, observations, hidden_game, hidden_agents, reward_yellow, done, value, log_probs, entropies):
+        self.states.append(game_state.detach())
+        self.observations.append(observations)
+        self.hiddens_game.append((hidden_game[0].detach(), hidden_game[1].detach()))
+        self.hiddens_agents.append([(h.detach(), c.detach()) for (h, c) in hidden_agents])
+        self.rewards.append(reward_yellow)
+        self.dones.append(done)
+        self.values.append(value.detach())
+        self.logps.append(log_probs.detach())
+        self.entropies.append(entropies.detach())
 
 
 # ============================================================
 # GAE
 # ============================================================
-def compute_gae(
-    rewards,
-    values,
-    dones,
-    gamma=0.99,
-    lam=0.95
-):
+def compute_gae(rewards, values, dones, gamma=0.99, lam=0.95):
     advantages = []
     gae = 0
     values = values + [0]
@@ -140,204 +139,103 @@ def compute_gae(
     return advantages, returns
 
 
-# ============================================================
-# MAPPO Update
-# ============================================================
-def mappo_update(policy, optimizer, buffer, clip=0.2, vf_coef=0.5, ent_coef=0.01):
-    advantages, returns = compute_gae(
-        buffer.rewards, buffer.values, buffer.dones
-    )
+def train_model(actor: Actor, critic: Critic, actor_optim: torch.optim, critic_optim: torch.optim, buffer: MAPPORolloutBuffer):
+    # hyperparams
+    vf_coef = 0.5
+    clip = 0.1
+    ent_coef = 0.01
+    # max_grad_norm = 0.5
 
-    advantages = torch.tensor(advantages, dtype=torch.float32)
-    returns = torch.tensor(returns, dtype=torch.float32)
-
-    loss = 0
-
-    # Actor loss (sum over agents)
-    for i in range(policy.num_agents):
-        for idx, (logp_old, adv) in enumerate(zip(buffer.logps[i], advantages)):
-            # Recompute new_logp via forward pass
-            # For simplicity, assuming states and hidden states are accessible here
-            # This is a placeholder: in a real implementation, you'd store states and hidden states to recompute
-            # Here, we just reuse logp_old as new_logp to fix math, but ideally recompute properly
-            new_logp = logp_old  # Placeholder
-
-            ratio = torch.exp(new_logp - logp_old)
-            surr1 = ratio * adv
-            surr2 = torch.clamp(ratio, 1 - clip, 1 + clip) * adv
-            policy_loss = -torch.min(surr1, surr2)
-            entropy_loss = 0  # Entropy not stored in buffer anymore, set to 0
-            loss += policy_loss + ent_coef * entropy_loss
+    # the advantages and returns are calculated based on yellow (right side playing team) perspective
+    advantages, returns = compute_gae(buffer.rewards, buffer.values, buffer.dones)
 
     # Critic loss
-    for value, ret in zip(buffer.values, returns):
-        loss += vf_coef * F.mse_loss(value.squeeze(), ret)
+    current_values = []
+    for state, hidden_game in zip(buffer.states, buffer.hiddens_game):
+        new_value, _, _ = critic(state, hidden_game)
+        current_values.append(new_value)
+    critic_loss = 0
+    for value, ret in zip(current_values, returns):
+        critic_loss += vf_coef * F.mse_loss(value, ret)
 
-    optimizer.zero_grad()
-    loss.backward()
-    optimizer.step()
+    critic_optim.zero_grad()
+    critic_loss.backward()
+    critic_optim.step()
 
+    # Actor loss (sum over agents)
+    actor_loss = 0
+    for i in range(len(buffer.dones)):
+        observations = buffer.observations[i]
+        hiddens_agents = buffer.hiddens_agents[i]
+        old_logps = buffer.logps[i]
+        advantage = advantages[i].detach()
+        # print("Advantage is: ", advantage)
+        agent_advantages = torch.cat([advantage, advantage, advantage, -advantage, -advantage, -advantage])
 
-def run_agent(
-    halt_event: Event,
-    rollout_queue: Queue,
-    policy_state_queue: Queue,
-    wm: WorldModel,
-    device: torch.device,
-    agent_id: int,
-    is_team_yellow: bool,
-    role: int,
-):
+        _, new_logp, new_entropies, _ = actor(observations, hiddens_agents)
 
-    env = FootballEnv(wm, "127.0.0.1", 20011, agent_id, is_team_yellow, role, True)
+        ratio = torch.exp(new_logp - old_logps)
+        # print("Ratio is: ", ratio)
+        surr1 = ratio * agent_advantages
+        # print("Surr1 is: ", surr1)
+        surr2 = torch.clamp(ratio, 1 - clip, 1 + clip) * agent_advantages
+        policy_loss = -torch.min(surr1, surr2).mean()
+        entropy_loss = new_entropies.mean()
+        actor_loss += policy_loss - ent_coef * entropy_loss
 
-    hidden = None
-    local_policy = MAPPOPolicy(Encoder(), num_agents=4).to(device)
-    num_agents = 4
-
-    state = env.get_normalized_state()
-    while True:
-
-        # Wait for updated policy weights
-        # if local_policy is None and not policy_state_queue.empty():
-        #     state_dict = policy_state_queue.get()
-        #     local_policy = MAPPOPolicy(Encoder(), num_agents=num_agents).to(device)
-        #     local_policy.load_state_dict(state_dict)
-        #     local_policy.eval()
-        #     hidden = local_policy.init_hidden(device)
-
-        if halt_event.is_set():
-            time.sleep(0.01)
-            continue
-
-        robot, ball, team, opp = state
-
-        robot = robot.to(device)
-        ball = ball.to(device)
-        team = team.to(device)
-        opp = opp.to(device)
-
-        mu, std, hidden, h = local_policy.actor_forward(robot, ball, team, opp, hidden)
-        actions, logp, entropy = sample_action(mu, std)
-        value = torch.zeros(1)  # placeholder
-        # value = local_policy.central_value(h).detach().cpu()
-
-        next_state, reward, done = env.step(actions)
-
-        transition = pack_transition(
-            agent_id, state, actions, logp, reward, done, hidden, value
-        )
-        rollout_queue.put(transition)
-
-        state = next_state
-
-        if done:
-            hidden = local_policy.init_hidden(device)
+    actor_optim.zero_grad()
+    actor_loss.backward()
+    actor_optim.step()
 
 
-def train_model(
-    halt_event: Event,
-    rollout_queue: Queue,
-    policy_state_queue: Queue,
-    num_agents: int
-):
-    device = torch.device("cpu")
-    encoder = Encoder()
-    policy = MAPPOPolicy(encoder, num_agents).to(device)
-    optimizer = torch.optim.Adam(policy.parameters(), lr=3e-4)
-    policy_state_queue.put(policy.state_dict())
-    print("[Trainer] Started")
+def mappo_process(wm):
+    env = GrSimEnv(wm, '127.0.0.1', 20011, True)
 
-    buffer = MAPPORolloutBuffer(num_agents)
+    actor = Actor()
+    critic = Critic()
+    actor_optim = torch.optim.Adam(actor.parameters(), lr=3e-4)
+    critic_optim = torch.optim.Adam(critic.parameters(), lr=5e-4)
+    rollout_buffer = MAPPORolloutBuffer()
 
-    while True:
+    num_episodes = 20
+    training_epochs = 5
+    episode_max_time = 0.1  # in minutes
+    episode_max_length = int(episode_max_time * 60 * 12)
+    episode_rewards = []
+    episode_reward = 0
+    for episode in range(num_episodes):
+        actions = torch.zeros(6, 1, 5)
+        hidden_obs = [actor.init_hidden() for _ in range(6)]
+        hidden_game = critic.init_hidden()
 
-        # Collect transitions
-        transition = rollout_queue.get()
+        for _ in range(episode_max_length):
+            game_state, observations, reward_yellow, done = env.step(actions)
+            episode_reward += reward_yellow
+            value, game_embedding, hidden_game = critic(game_state, hidden_game)
 
-        agent_id = transition["agent_id"]
-        buffer.logps[agent_id].append(transition["logp"])
-        buffer.rewards.append(transition["reward"])
-        buffer.dones.append(transition["done"])
-        buffer.values.append(transition["value"])
+            actions, log_probs, entropies, next_hidden_obs = actor(observations, hidden_obs)
 
-        # Check if referee halted → time to train
-        if halt_event.is_set():
-            print("[Trainer] Halt received, training...")
+            rollout_buffer.add(
+                game_state, observations, hidden_game, hidden_obs,
+                reward_yellow, done, value, log_probs, entropies)
+            hidden_obs = next_hidden_obs
 
-            mappo_update(policy, optimizer, buffer)
+            if done:
+                env.reset()
+                break
 
-            buffer = MAPPORolloutBuffer(num_agents)
-            halt_event.clear()
-
-            # Send new policy weights to agents
-            policy_state_queue.put(policy.state_dict())
-
-            print("[Trainer] Policy updated and broadcasted")
-
-
-def mappo(
-    wm: WorldModel,
-    halt_event: Event,
-    is_team_yellow: bool,
-):
-    print("Starting MAPPO for team", "Yellow" if is_team_yellow else "Blue")
-    device = torch.device("cpu")
-    num_agents = 4
-
-    rollout_queue = Queue()
-
-    policy_state_queue = Queue()
-
-    # env_goalie = FootballEnv(wm, "127.0.0.1", 20011, 0, 0, True,)
-    goalie = Process(
-        target=run_agent,
-        args=(halt_event, rollout_queue, policy_state_queue, wm, device, 0, is_team_yellow, 0)
-    )
-
-    # env_p1 = FootballEnv(wm, "127.0.0.1", 20011, 1, is_team_yellow, 1, True,)
-    player_1 = Process(
-        target=run_agent,
-        args=(halt_event, rollout_queue, policy_state_queue, wm, device, 1, is_team_yellow, 1)
-    )
-
-    # env_p2 = FootballEnv(wm, "127.0.0.1", 20011, 2, is_team_yellow, 1, True,)
-    player_2 = Process(
-        target=run_agent,
-        # args=(halt_event, rollout_queue, env_p2, device, 2)
-        args=(halt_event, rollout_queue, policy_state_queue, wm, device, 2, is_team_yellow, 1)
-    )
-
-    # env_p3 = FootballEnv(wm, "127.0.0.1", 20011, 3, is_team_yellow, 1, True,)
-    player_3 = Process(
-        target=run_agent,
-        # args=(halt_event, rollout_queue, env_p3, device, 3)
-        args=(halt_event, rollout_queue, policy_state_queue, wm, device, 3, is_team_yellow, 1)
-    )
-
-    trainer = Process(
-        target=train_model,
-        args=(halt_event, rollout_queue, policy_state_queue, num_agents)
-    )
-
-    print("Starting agents...")
-    goalie.start()
-    player_1.start()
-    player_2.start()
-    player_3.start()
-    trainer.start()
+        print(f"Episode {episode + 1} reward:   ", episode_reward)
+        episode_rewards.append(episode_reward)
+        # every X episodes we update our policy to improve it online using ppo
+        if (episode+1) % 5 == 0:
+            for _ in range(training_epochs):
+                train_model(actor, critic, actor_optim, critic_optim, rollout_buffer)
+            rollout_buffer = MAPPORolloutBuffer()
 
 
 if __name__ == '__main__':
-    try:
-        set_start_method('fork')
-    except RuntimeError:
-        traceback.print_exc()
-        print("Could not set start method to 'fork', continuing with default.")
-
     vision_q = Queue()
     gc_q = Queue()  # GameController queue, not in use
-    halt_event = Event()
 
     vision_wkr = Process(target=vision_worker, args=(vision_q, True, 10020,))
 
@@ -345,15 +243,19 @@ if __name__ == '__main__':
     wm_manager.start()
     wm = wm_manager.WorldModel()  # pylint: disable=no-member
     wmr = Process(target=wm_runner, args=(wm, vision_q, gc_q,))
-    referee_wkr = Process(target=referee_worker, args=(wm, halt_event,))
+
+    yellow_goalie = Process(target=goalie_process, args=(wm, 'B', '127.0.0.1', 20011, 0, True))
+    blue_goalie = Process(target=goalie_process, args=(wm, 'B', '127.0.0.1', 20011, 0, False))
+    mappo = Process(target=mappo_process, args=(wm,))
 
     vision_wkr.start()
     wmr.start()
-    referee_wkr.start()
+    yellow_goalie.start()
+    blue_goalie.start()
+    mappo.start()
 
-    mappo(wm, halt_event, is_team_yellow=True)
-    mappo(wm, halt_event, is_team_yellow=False)
-
-    referee_wkr.join()
+    mappo.join()
+    yellow_goalie.join()
+    blue_goalie.join()
     vision_wkr.join()
     wmr.join()

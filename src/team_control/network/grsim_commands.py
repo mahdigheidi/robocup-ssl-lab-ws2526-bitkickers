@@ -135,7 +135,6 @@ class GrSimRobotCommands:
         Returns:
             grSim_Commands: GrSim protobuf message.
         """
-        # print(robot_command)
         grsim_command = self.new_command(
             robot_id=robot_command.robot_id,
             vx=robot_command.vx,
