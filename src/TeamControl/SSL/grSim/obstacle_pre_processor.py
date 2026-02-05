@@ -71,28 +71,35 @@ def mark_forbidden_rect(a, x0: float, x1: float, y0: float, y1: float):
 
 def mark_static_obstacles(a, static_centers: List[Tuple[float, float]], radius: float = ROBOT_RADIUS):
     """
-    For each static obstacle center, mark its corresponding cell and adjacent cells with 1000.
-    Conservative marking: mark any cell whose center is within (radius + HALF_DIAG).
+    For each static obstacle center:
+    - Mark cells within COLLISION_DISTANCE as forbidden (1000)
+    - Add graduated cost penalty for cells within clearance_dist (prefer more distance)
     """
-    thresh = COLLISION_DISTANCE
-    thresh2 = thresh * thresh
+    forbidden_thresh = COLLISION_DISTANCE  # Hard forbidden zone - can't path through
+    clearance_dist = 500.0  # Soft penalty zone - prefer to avoid
+    
     for (ox, oy) in static_centers:
-        # compute candidate index range to check
         ix_c, iy_c = point_to_cell(ox, oy)
-        # compute how many cells to expand in index coordinates
-        # expand by ceil(thresh / CELL)
-        expand = int(math.ceil(thresh / CELL))
+        # Expand search to cover the clearance zone
+        expand = int(math.ceil(clearance_dist / CELL))
         ix_lo = max(0, ix_c - expand)
         ix_hi = min(NX - 1, ix_c + expand)
         iy_lo = max(0, iy_c - expand)
         iy_hi = min(NY - 1, iy_c + expand)
+        
         for ix in range(ix_lo, ix_hi + 1):
             for iy in range(iy_lo, iy_hi + 1):
                 cx, cy = cell_center(ix, iy)
-                dx = cx - ox
-                dy = cy - oy
-                if dx*dx + dy*dy <= thresh2:
+                dist = math.hypot(cx - ox, cy - oy)
+                
+                if dist <= forbidden_thresh:
+                    # Hard forbidden - can't path through
                     a[ix, iy] = 1000.0
+                elif dist <= clearance_dist:
+                    # Graduated cost penalty - closer = higher cost
+                    # Ranges from 0 (at clearance_dist) to 200 (at forbidden_thresh)
+                    penalty = 200.0 * (1.0 - (dist - forbidden_thresh) / (clearance_dist - forbidden_thresh))
+                    a[ix, iy] = max(a[ix, iy], penalty)
     return a
 
 
@@ -120,7 +127,7 @@ def mark_dynamic_influence(a, dynamics: List[Tuple[Tuple[float,float], Tuple[flo
     For each dynamic obstacle given by (start, goal), increase by `inc` the cells whose center's
     perpendicular distance to the line (start->goal) is less than threshold.
     """
-    thresh = COLLISION_DISTANCE
+    thresh = COLLISION_DISTANCE  # Revert to original - dynamic influence is additive anyway
     for (start, goal) in dynamics:
         x1, y1 = start
         x2, y2 = goal

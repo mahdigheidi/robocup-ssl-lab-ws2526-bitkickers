@@ -144,18 +144,158 @@ def check_possession(
     return dist < threshold
 
 
-def avoid_collision_robust(rx, ry, tx, ty, opponents, safe_dist=COLLISION_DISTANCE + 20.0):
-    """Avoid collisions with a dynamic list of opponent robots."""
+def apply_velocity_repulsion(
+    rx: float, ry: float, 
+    vx: float, vy: float, 
+    other_robots: list, 
+    repulsion_dist: float = 500.0,
+    max_repulsion: float = 2000.0
+) -> tuple[float, float]:
+    """
+    Apply velocity-based repulsion to avoid collisions with other robots.
+    
+    This directly modifies the velocity vector to push the robot away from
+    nearby robots, regardless of where the target is. Essential for
+    preventing collisions when multiple robots converge on the same point.
+    
+    Args:
+        rx, ry: Robot's current position
+        vx, vy: Robot's current velocity command
+        other_robots: List of other robots (teammates + opponents)
+        repulsion_dist: Distance at which repulsion starts
+        max_repulsion: Maximum repulsion velocity to add
+        
+    Returns:
+        Modified (vx, vy) velocity with repulsion applied
+    """
+    repulsion_vx = 0.0
+    repulsion_vy = 0.0
+    
+    for robot in other_robots:
+        # Extract position from EntityState or array
+        pos = robot.position[:2] if hasattr(robot, "position") else robot[:2]
+        
+        dist = math.hypot(rx - pos[0], ry - pos[1])
+        
+        if dist < repulsion_dist and dist > 1e-6:
+            # Compute repulsion strength - stronger when closer
+            # At dist=0: strength=1, at dist=repulsion_dist: strength=0
+            normalized = dist / repulsion_dist
+            strength = (1.0 - normalized) ** 2  # Quadratic falloff
+            
+            # Extra strong when very close (potential collision)
+            if dist < COLLISION_DISTANCE + 50:
+                strength *= 3.0
+            
+            # Direction: away from robot
+            dx = (rx - pos[0]) / dist
+            dy = (ry - pos[1]) / dist
+            
+            repulsion_vx += dx * strength * max_repulsion
+            repulsion_vy += dy * strength * max_repulsion
+    
+    # Add repulsion to velocity
+    new_vx = vx + repulsion_vx
+    new_vy = vy + repulsion_vy
+    
+    # Optionally cap total velocity to prevent extreme speeds
+    speed = math.hypot(new_vx, new_vy)
+    max_speed = 5000.0  # mm/s
+    if speed > max_speed:
+        scale = max_speed / speed
+        new_vx *= scale
+        new_vy *= scale
+    
+    return new_vx, new_vy
+
+
+def avoid_collision_robust(rx, ry, tx, ty, opponents, safe_dist=COLLISION_DISTANCE + 100.0, ball_pos=None):
+    """
+    Avoid collisions with a dynamic list of opponent robots.
+    
+    This function provides both:
+    1. Target adjustment - pushes target away from obstacles
+    2. Reactive repulsion - if robot is currently too close to another robot,
+       adds a repulsion force to move away immediately
+    
+    Args:
+        rx, ry: Robot's current position
+        tx, ty: Target position
+        opponents: List of opponent robots (EntityState or position arrays)
+        safe_dist: Minimum safe distance to maintain
+        ball_pos: Optional ball position [x, y]. If provided, robots with the ball
+                  between them won't trigger repulsion (they can't directly collide).
+        
+    Returns:
+        Adjusted (tx, ty) target position
+    """
+    # Reactive repulsion distance - start reacting well before collision
+    # ROBOT_RADIUS is ~88.5mm, so two robots touch at ~177mm
+    # Start reacting at ~400mm to have time to avoid
+    reactive_dist = 400.0
+    
+    # Accumulate repulsion forces from all nearby robots
+    repulsion_x = 0.0
+    repulsion_y = 0.0
+    
     for op_pos in opponents:
-        # op_pos is likely EntityState or np.ndarray
+        # Extract position from EntityState or array
         pos = op_pos.position[:2] if hasattr(op_pos, "position") else op_pos[:2]
-        d = math.hypot(tx - pos[0], ty - pos[1])
-        if 5.0 < d < safe_dist:
-            push = (safe_dist - d) / safe_dist
-            dx = (tx - pos[0]) / d
-            dy = (ty - pos[1]) / d
-            tx += dx * push * (COLLISION_DISTANCE / 1.5)
-            ty += dy * push * (COLLISION_DISTANCE / 1.5)
+        
+        # === Check if ball is between robot and obstacle ===
+        # If so, skip repulsion - they can't directly collide
+        if ball_pos is not None:
+            robot_to_obs = math.hypot(rx - pos[0], ry - pos[1])
+            if robot_to_obs > 1e-6:
+                robot_to_ball = math.hypot(rx - ball_pos[0], ry - ball_pos[1])
+                ball_to_obs = math.hypot(ball_pos[0] - pos[0], ball_pos[1] - pos[1])
+                
+                # Ball is "between" if it's closer to both than they are to each other,
+                # and roughly on the line (sum of distances is close to direct distance)
+                if robot_to_ball < robot_to_obs and ball_to_obs < robot_to_obs:
+                    # Check if ball is roughly on the line (within tolerance)
+                    path_length = robot_to_ball + ball_to_obs
+                    if path_length < robot_to_obs * 1.3:  # 30% tolerance for "on the line"
+                        # Ball is between us - skip repulsion for this robot
+                        continue
+        
+        # === REACTIVE REPULSION: Check robot's current position ===
+        robot_to_obs = math.hypot(rx - pos[0], ry - pos[1])
+        
+        if robot_to_obs < reactive_dist and robot_to_obs > 1e-6:
+            # Robot is too close - compute repulsion force
+            # Strength increases as distance decreases
+            normalized_dist = robot_to_obs / reactive_dist  # 0 to 1
+            # Strong exponential falloff - very strong when close
+            strength = (1.0 - normalized_dist) ** 2
+            
+            # Extra strong repulsion when actually colliding (< 200mm)
+            if robot_to_obs < 200.0:
+                strength *= 3.0
+            
+            # Direction: away from the obstacle
+            dx = (rx - pos[0]) / robot_to_obs
+            dy = (ry - pos[1]) / robot_to_obs
+            
+            # Accumulate repulsion - use large magnitude to override target attraction
+            repulsion_x += dx * strength * 500.0
+            repulsion_y += dy * strength * 500.0
+        
+        # === TARGET ADJUSTMENT: Push target away from obstacles ===
+        target_to_obs = math.hypot(tx - pos[0], ty - pos[1])
+        
+        if 1e-6 < target_to_obs < safe_dist:
+            push = (safe_dist - target_to_obs) / safe_dist
+            dx = (tx - pos[0]) / target_to_obs
+            dy = (ty - pos[1]) / target_to_obs
+            # Push proportional to safe_dist to actually maintain the desired clearance
+            tx += dx * push * safe_dist
+            ty += dy * push * safe_dist
+    
+    # Apply accumulated repulsion to target
+    tx += repulsion_x
+    ty += repulsion_y
+    
     return tx, ty
 
 

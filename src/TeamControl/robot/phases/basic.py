@@ -14,7 +14,7 @@ from TeamControl.robot.context import RobotContext
 from TeamControl.network.ssl_sockets import grSimSender
 from TeamControl.ball.ball_idle_spawner import BallIdleSpawner
 from TeamControl.obstacles.rules import avoid_defense_area_target
-from TeamControl.obstacles.helpers import RoleArea, avoid_collision_robust
+from TeamControl.obstacles.helpers import RoleArea, avoid_collision_robust, apply_velocity_repulsion
 
 def clamp(v, lo, hi):
     return max(lo, min(hi, v))
@@ -137,16 +137,27 @@ class ShadowBallState(State[RobotContext]):
             margin=self.margin,
         )
 
+        # Avoid collision with other robots
+        rx, ry = context.my_state.position[0], context.my_state.position[1]
+        obstacles = list(context.opponents.values()) + list(context.teammates.values())
+        tx, ty = avoid_collision_robust(rx, ry, target[0], target[1], obstacles, ball_pos=context.ball.position)
+
         # Prepare obstacles for movement
         static_obs = [tuple(o.position[:2]) for o in context.opponents.values()] + \
                      [tuple(t.position[:2]) for t in context.teammates.values()]
 
         vx, vy = movement.go_to(
             context.my_state.position,
-            target,
+            (tx, ty),
             max_speed=1500,
             static_obstacles=static_obs,
         )
+        
+        # Apply velocity repulsion to avoid teammate collisions
+        # Apply velocity repulsion to avoid collisions with all robots
+        all_robots = list(context.teammates.values()) + list(context.opponents.values())
+        vx, vy = apply_velocity_repulsion(rx, ry, vx, vy, all_robots)
+        
         w = movement.face_towards(context.my_state.position, context.ball.position)
 
         sender.send_command(
@@ -229,7 +240,7 @@ class GoaliePositioningState(State[RobotContext]):
         # Avoid collision with other robots
         obstacles = list(context.opponents.values()) + list(context.teammates.values())
         static_obs = [tuple(o.position[:2]) for o in obstacles]
-        target_x, target_y = avoid_collision_robust(robot_pos[0], robot_pos[1], target_x, target_y, obstacles)
+        target_x, target_y = avoid_collision_robust(robot_pos[0], robot_pos[1], target_x, target_y, obstacles, ball_pos=context.ball.position)
 
         # Project to legal area if provided
         if self.role_area is not None:
@@ -298,7 +309,7 @@ class BlockPassingLaneState(State[RobotContext]):
         # Avoid collision with other robots
         obstacles = list(context.opponents.values()) + list(context.teammates.values())
         static_obs = [tuple(o.position[:2]) for o in obstacles]
-        tx, ty = avoid_collision_robust(rx, ry, tx, ty, obstacles)
+        tx, ty = avoid_collision_robust(rx, ry, tx, ty, obstacles, ball_pos=context.ball.position)
 
         # Apply RoleArea constraints
         if self.role_area is not None:
@@ -385,7 +396,7 @@ class InterceptFastBallState(State[RobotContext]):
         
         obstacles = list(context.opponents.values()) + list(context.teammates.values())
         static_obs = [tuple(o.position[:2]) for o in obstacles]
-        tx, ty = avoid_collision_robust(rx, ry, tx, ty, obstacles)
+        tx, ty = avoid_collision_robust(rx, ry, tx, ty, obstacles, ball_pos=context.ball.position)
 
         vx, vy = movement.go_to(
             context.my_state.position,
@@ -559,7 +570,7 @@ class BlockingState(State[RobotContext]):
 
         obstacles = list(context.opponents.values()) + list(context.teammates.values())
         static_obs = [tuple(o.position[:2]) for o in obstacles]
-        tx, ty = avoid_collision_robust(context.my_state.position[0], context.my_state.position[1], tx, ty, obstacles)
+        tx, ty = avoid_collision_robust(context.my_state.position[0], context.my_state.position[1], tx, ty, obstacles, ball_pos=context.ball.position)
 
         vx, vy = movement.go_to(
             context.my_state.position,

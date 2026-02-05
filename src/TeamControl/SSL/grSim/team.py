@@ -27,6 +27,9 @@ from TeamControl.robot.roles.passer import Passer
 
 from TeamControl.robot.roles.midfielder import Midfielder
 
+# Collision detection constants
+COLLISION_THRESHOLD = 180.0  # mm - robots touching (2 * ROBOT_RADIUS ~177mm)
+
 SIM_IP = "127.0.0.1"
 CMD_LISTEN_PORT = 20011
 DIVISION = "B"
@@ -42,6 +45,54 @@ def spawn_ball_randomly_in_the_middle():
     y = random.uniform(-0.5, 0.5)
     send_ball_to_grsim(x, y, 0, 0)
     time.sleep(0.1)
+
+
+def check_collisions(world_state: WorldState) -> list[dict]:
+    """
+    Check for collisions between all robots.
+    Returns list of collision events with robot IDs and relative speed.
+    """
+    collisions = []
+    
+    # Get all robot states
+    yellow_robots = []
+    blue_robots = []
+    
+    for rid in range(6):  # Check robot IDs 0-5
+        ys = world_state.get_robot_state(rid, is_yellow=True)
+        if ys is not None:
+            yellow_robots.append((rid, True, ys))
+        bs = world_state.get_robot_state(rid, is_yellow=False)
+        if bs is not None:
+            blue_robots.append((rid, False, bs))
+    
+    all_robots = yellow_robots + blue_robots
+    
+    # Check all pairs
+    for i, (rid1, is_yellow1, state1) in enumerate(all_robots):
+        for rid2, is_yellow2, state2 in all_robots[i+1:]:
+            pos1 = state1.position[:2]
+            pos2 = state2.position[:2]
+            
+            dist = np.linalg.norm(pos1 - pos2)
+            
+            if dist < COLLISION_THRESHOLD:
+                # Calculate relative speed
+                vel1 = state1.velocity[:2] if hasattr(state1, 'velocity') and state1.velocity is not None else np.zeros(2)
+                vel2 = state2.velocity[:2] if hasattr(state2, 'velocity') and state2.velocity is not None else np.zeros(2)
+                relative_speed = np.linalg.norm(vel1 - vel2)
+                
+                team1 = "Y" if is_yellow1 else "B"
+                team2 = "Y" if is_yellow2 else "B"
+                
+                collisions.append({
+                    "robot1": f"{team1}{rid1}",
+                    "robot2": f"{team2}{rid2}",
+                    "distance": dist,
+                    "relative_speed": relative_speed,
+                })
+    
+    return collisions
 
 
 # MAIN TEAM PROCESS
@@ -167,6 +218,10 @@ def team_control_process(wm: WorldModel):
     world_state = WorldState()
     version = 0
     last_time = time.time()
+    
+    # Collision tracking
+    total_collisions = 0
+    active_collisions: set[tuple[str, str]] = set()  # Track ongoing collisions to avoid double-counting
 
     # MAIN LOOP
 
@@ -184,6 +239,23 @@ def team_control_process(wm: WorldModel):
                 if st:
                     robo.update_position(st.position)
 
+            
+            # Check for collisions
+            collisions = check_collisions(world_state)
+            current_collision_pairs = set()
+            
+            for col in collisions:
+                pair = (col["robot1"], col["robot2"])
+                current_collision_pairs.add(pair)
+                
+                # Only count as new collision if wasn't already colliding
+                if pair not in active_collisions:
+                    total_collisions += 1
+                    print(f"⚠️  COLLISION #{total_collisions}: {col['robot1']} <-> {col['robot2']} | "
+                          f"dist={col['distance']:.0f}mm, rel_speed={col['relative_speed']:.0f}mm/s")
+            
+            # Update active collisions
+            active_collisions = current_collision_pairs
             for rid, robo in blue_robots.items():
                 bt = world_state.get_robot_state(rid, is_yellow=False)
                 if bt:

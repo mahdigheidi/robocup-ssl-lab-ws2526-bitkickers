@@ -8,7 +8,7 @@ from TeamControl.network.robot_command import RobotCommand
 from TeamControl.robot.context import RobotContext, EntityState, POSSESSION_THRESHOLD
 from TeamControl.ball.ball_idle_spawner import BallIdleSpawner
 from TeamControl.obstacles.rules import avoid_defense_area_target
-from TeamControl.obstacles.helpers import RoleArea, avoid_collision_robust
+from TeamControl.obstacles.helpers import RoleArea, avoid_collision_robust, apply_velocity_repulsion
 
 
 # Configuration Constants
@@ -94,7 +94,8 @@ class ChasingBallState(State[RobotContext]):
         obstacles = list(context.opponents.values()) + list(context.teammates.values())
         target_x, target_y = avoid_collision_robust(
             context.my_state.position[0], context.my_state.position[1], 
-            target_x, target_y, obstacles
+            target_x, target_y, obstacles,
+            ball_pos=context.ball.position
         )
 
         if self.role_area is not None:
@@ -114,6 +115,13 @@ class ChasingBallState(State[RobotContext]):
             max_speed=CHASE_MAX_SPEED,
             static_obstacles=static_obs,
         )
+        
+        # Apply velocity repulsion to avoid teammate collisions
+        vx, vy = apply_velocity_repulsion(
+            context.my_state.position[0], context.my_state.position[1],
+            vx, vy, list(context.teammates.values())
+        )
+        
         w = movement.face_towards(robot_pos=context.my_state.position, target=context.ball.position)
         sender.send_command(
             RobotCommand(robot_id=context.robot_id, vx=vx, vy=vy, w=w, kick=0, dribble=1)
@@ -144,7 +152,8 @@ class ApproachingBallState(State[RobotContext]):
         obstacles = list(context.opponents.values()) + list(context.teammates.values())
         target_x, target_y = avoid_collision_robust(
             context.my_state.position[0], context.my_state.position[1], 
-            target_x, target_y, obstacles
+            target_x, target_y, obstacles,
+            ball_pos=context.ball.position
         )
 
         if self.role_area is not None:
@@ -163,6 +172,13 @@ class ApproachingBallState(State[RobotContext]):
             max_acceleration=APPROACH_MAX_ACCELERATION,
             max_speed=APPROACH_MAX_SPEED,
             static_obstacles=static_obs,
+        )
+        
+        # Apply velocity repulsion to avoid collisions with all robots
+        all_robots = list(context.teammates.values()) + list(context.opponents.values())
+        vx, vy = apply_velocity_repulsion(
+            context.my_state.position[0], context.my_state.position[1],
+            vx, vy, all_robots
         )
         
         w = movement.face_towards(robot_pos=context.my_state.position, target=context.ball.position)
@@ -298,7 +314,14 @@ class AligningWithTargetState(State[RobotContext]):
                 if self.role_area is not None:
                     tx, ty = self.role_area.project_to_legal_area(context, tx, ty, is_goalie=self.is_goalie)
                 
+                # Avoid collision with other robots
                 obstacles = list(context.opponents.values()) + list(context.teammates.values())
+                tx, ty = avoid_collision_robust(
+                    context.my_state.position[0], context.my_state.position[1],
+                    tx, ty, obstacles,
+                    ball_pos=context.ball.position
+                )
+                
                 static_obs = [tuple(o.position[:2]) for o in obstacles]
                 vx, vy = movement.go_to(
                     context.my_state.position,
@@ -629,7 +652,8 @@ class PositioningState(State[RobotContext]):
                     obstacles = list(context.opponents.values()) + list(context.teammates.values())
                     tx, ty = avoid_collision_robust(
                         context.my_state.position[0], context.my_state.position[1], 
-                        tx, ty, obstacles
+                        tx, ty, obstacles,
+                        ball_pos=context.ball.position
                     )
 
                     if self.role_area is not None:
@@ -674,9 +698,17 @@ class PositioningState(State[RobotContext]):
             tx, ty = target_pos[0], target_pos[1]
             if self.role_area is not None:
                 tx, ty = self.role_area.project_to_legal_area(context, tx, ty, is_goalie=self.is_goalie)
+            
+            # Avoid collision with other robots
+            obstacles = list(context.opponents.values()) + list(context.teammates.values())
+            tx, ty = avoid_collision_robust(
+                context.my_state.position[0], context.my_state.position[1],
+                tx, ty, obstacles,
+                ball_pos=context.ball.position
+            )
+            
             # Prepare obstacles for movement
-            static_obs = [tuple(o.position[:2]) for o in context.opponents.values()] + \
-                         [tuple(t.position[:2]) for t in context.teammates.values()]
+            static_obs = [tuple(o.position[:2]) for o in obstacles]
 
             # Need to move to get clear
             vx, vy = movement.go_to(
@@ -740,7 +772,8 @@ class InterceptingState(State[RobotContext]):
         obstacles = list(context.opponents.values()) + list(context.teammates.values())
         tx, ty = avoid_collision_robust(
             context.my_state.position[0], context.my_state.position[1], 
-            tx, ty, obstacles
+            tx, ty, obstacles,
+            ball_pos=context.ball.position
         )
 
         if self.role_area is not None:
@@ -1006,7 +1039,8 @@ class ChasingBallForShotState(State[RobotContext]):
         obstacles = list(context.opponents.values()) + list(context.teammates.values())
         target_x, target_y = avoid_collision_robust(
             context.my_state.position[0], context.my_state.position[1], 
-            target_x, target_y, obstacles
+            target_x, target_y, obstacles,
+            ball_pos=context.ball.position
         )
 
         if self.role_area is not None:
@@ -1026,6 +1060,14 @@ class ChasingBallForShotState(State[RobotContext]):
             max_speed=CHASE_MAX_SPEED,
             static_obstacles=static_obs,
         )
+        
+        # Apply velocity repulsion to avoid collisions with all robots
+        all_robots = list(context.teammates.values()) + list(context.opponents.values())
+        vx, vy = apply_velocity_repulsion(
+            context.my_state.position[0], context.my_state.position[1],
+            vx, vy, all_robots
+        )
+        
         w = movement.face_towards(robot_pos=context.my_state.position, target=context.ball.position)
         sender.send_command(
             RobotCommand(robot_id=context.robot_id, vx=vx, vy=vy, w=w, kick=0, dribble=1)
@@ -1057,7 +1099,8 @@ class ApproachingBallForShotState(State[RobotContext]):
         obstacles = list(context.opponents.values()) + list(context.teammates.values())
         target_x, target_y = avoid_collision_robust(
             context.my_state.position[0], context.my_state.position[1], 
-            target_x, target_y, obstacles
+            target_x, target_y, obstacles,
+            ball_pos=context.ball.position
         )
 
         if self.role_area is not None:
@@ -1077,6 +1120,14 @@ class ApproachingBallForShotState(State[RobotContext]):
             max_speed=APPROACH_MAX_SPEED,
             static_obstacles=static_obs,
         )
+        
+        # Apply velocity repulsion to avoid collisions with all robots
+        all_robots = list(context.teammates.values()) + list(context.opponents.values())
+        vx, vy = apply_velocity_repulsion(
+            context.my_state.position[0], context.my_state.position[1],
+            vx, vy, all_robots
+        )
+        
         w = movement.face_towards(robot_pos=context.my_state.position, target=context.ball.position)
         sender.send_command(
             RobotCommand(robot_id=context.robot_id, vx=vx, vy=vy, w=w, kick=0, dribble=1)
