@@ -2,6 +2,8 @@
 # TEAM CONTROL MAIN FILE
 # ======================
 
+from argparse import ArgumentParser
+import re
 import time
 import sys
 import numpy as np
@@ -44,6 +46,7 @@ def spawn_ball_randomly_in_the_middle():
 
 # MAIN TEAM PROCESS
 
+
 def team_control_process(wm: WorldModel):
     enable_logging()
 
@@ -51,17 +54,34 @@ def team_control_process(wm: WorldModel):
     # Default is both teams if neither or both are specified
     run_yellow = True
     run_blue = True
-    
-    args = [arg.lower() for arg in sys.argv]
-    if "yellow" in args and "blue" not in args:
-        run_blue = False
-    elif "blue" in args and "yellow" not in args:
-        run_yellow = False
+
+    parser = ArgumentParser()
+    parser.add_argument("ip", type=str, nargs='?', default="127.0.0.1", help="grSim IP address")
+    parser.add_argument("--yellow", action="store_true", help="Control only yellow team")
+    parser.add_argument("--blue", action="store_true", help="Control only blue team")
+    parser.add_argument("--dev", action="store_true", help="Send ball commands (do not enable in competition!)")
+
+    parsed_args = parser.parse_args()
+
+    # Override SIM_IP if provided
+    if parsed_args.ip:
+        global SIM_IP
+        SIM_IP = parsed_args.ip
+
+    # Determine which teams to run based on parsed arguments
+    run_blue = not parsed_args.yellow
+    run_yellow = not parsed_args.blue
+
+    dev_mode = parsed_args.dev
+
 
     if run_yellow:
         print("Starting YELLOW team...")
     if run_blue:
         print("Starting BLUE team...")
+    print(f"Sim IP: {SIM_IP}")
+
+    print("------------------------------------")
 
     # Initialize match standing
     goal_count_blue = 0
@@ -129,12 +149,7 @@ def team_control_process(wm: WorldModel):
             blue_striker.spawn(x=2500, y=0, orientation=0.0)
             time.sleep(0.05)
 
-            blue_robots = {
-                0: blue_goalie,
-                1: blue_defender,
-                2: blue_midfielder,
-                3: blue_striker
-            }
+            blue_robots = {0: blue_goalie, 1: blue_defender, 2: blue_midfielder, 3: blue_striker}
 
             # Initial phases
             blue_striker.switch_phase(Striker.Phase.RECEIVING)
@@ -146,7 +161,8 @@ def team_control_process(wm: WorldModel):
             print("Blue team spawn failed:", e)
 
     # Spawn ball
-    send_ball_to_grsim(0.0, 0.0, 0.0, 0.0)
+    if dev_mode:
+        send_ball_to_grsim(0.0, 0.0, 0.0, 0.0)
 
     # World state
     world_state = WorldState()
@@ -154,7 +170,7 @@ def team_control_process(wm: WorldModel):
     last_time = time.time()
 
     # MAIN LOOP
-  
+
     while True:
         if version < wm.get_version():
             version = wm.get_version()
@@ -165,24 +181,22 @@ def team_control_process(wm: WorldModel):
 
             for rid, robo in robots.items():
                 st = world_state.get_robot_state(rid, is_yellow=True)
-                
+
                 if st:
                     robo.update_position(st.position)
-                    
-            for rid, robo in blue_robots.items():  
+
+            for rid, robo in blue_robots.items():
                 bt = world_state.get_robot_state(rid, is_yellow=False)
-                if bt:      
-                    
+                if bt:
                     robo.update_position(bt.position)
 
         # Execute behaviors
-     
+
         for robo in robots.values():
             robo.execute_behavior(
                 world_state=world_state,
                 sender=sender,
                 spawner=spawner,
-            
             )
         for robo in blue_robots.values():
             robo.execute_behavior(
@@ -195,22 +209,25 @@ def team_control_process(wm: WorldModel):
         ball_pos = world_state.ball.position
         goal_y_min = -spawner.goal_width / 2
         goal_y_max = spawner.goal_width / 2
-        
-        if (ball_pos[0] >= spawner.goal_line_x and goal_y_min <= ball_pos[1] <= goal_y_max):
+
+        if ball_pos[0] >= spawner.goal_line_x and goal_y_min <= ball_pos[1] <= goal_y_max:
             goal_count_blue += 1
             print(f"Blue Team scored a GOAL !!!!!")
             print(f"Blue Team Goals: {goal_count_blue}")
             print(f"Yellow Team Goals: {goal_count_yellow}")
-            spawn_ball_randomly_in_the_middle()
+            if dev_mode:
+                spawn_ball_randomly_in_the_middle()
 
-        elif (ball_pos[0] <= -spawner.goal_line_x and goal_y_min <= ball_pos[1] <= goal_y_max):
+        elif ball_pos[0] <= -spawner.goal_line_x and goal_y_min <= ball_pos[1] <= goal_y_max:
             goal_count_yellow += 1
             print(f"Yellow Team scored a GOAL !!!!!")
             print(f"Yellow Team Goals: {goal_count_yellow}")
             print(f"Blue Team Goals: {goal_count_blue}")
-            spawn_ball_randomly_in_the_middle()
+            if dev_mode:
+                spawn_ball_randomly_in_the_middle()
 
         elif not spawner.is_ball_in_field(ball_pos):
-            spawn_ball_randomly_in_the_middle()
+            if dev_mode:
+                spawn_ball_randomly_in_the_middle()
 
-        #time.sleep(0.02)
+        # time.sleep(0.02)
