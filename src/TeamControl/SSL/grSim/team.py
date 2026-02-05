@@ -25,7 +25,8 @@ from TeamControl.robot.roles.passer import Passer
 
 from TeamControl.robot.roles.midfielder import Midfielder
 
-SIM_IP = "127.0.0.1"
+# SIM_IP = "127.0.0.1"
+SIM_IP = "192.168.178.2"
 CMD_LISTEN_PORT = 20011
 DIVISION = "B"
 
