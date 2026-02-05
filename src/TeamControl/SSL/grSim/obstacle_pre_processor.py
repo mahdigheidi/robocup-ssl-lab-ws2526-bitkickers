@@ -235,18 +235,20 @@ def cell_to_point(ix: int, iy: int) -> Tuple[float, float]:
 
 def preprocess_best_path(start, goal, static_obstacles, dynamic_obstacles, allow_defense:bool, is_yellow:bool):
     a = np.ones((NX, NY), dtype=float)
+    # Buffer for defense areas to keep robot body out
+    buffer = ROBOT_RADIUS + 10.0
+    
     if allow_defense:
-    # Yellow defense
-
         if is_yellow:
-            # block BLUE defense only
-            a = mark_forbidden_rect(a, -4400.0, -3400.0, -1100.0, 1100.0)
+            # block BLUE defense only (with buffer)
+            a = mark_forbidden_rect(a, -4400.0 - buffer, -3400.0 + buffer, -1100.0 - buffer, 1100.0 + buffer)
         else:
-            # block YELLOW defense only
-            a = mark_forbidden_rect(a, 3400.0, 4400.0, -1100.0, 1100.0)
+            # block YELLOW defense only (with buffer)
+            a = mark_forbidden_rect(a, 3400.0 - buffer, 4400.0 + buffer, -1100.0 - buffer, 1100.0 + buffer)
     else:
-        a = mark_forbidden_rect(a, 3400.0, 4400.0, -1100.0, 1100.0)      # yellow defense
-        a = mark_forbidden_rect(a, -4400.0, -3400.0, -1100.0, 1100.0)    # blue defense
+        # block BOTH defense areas (with buffer)
+        a = mark_forbidden_rect(a, 3400.0 - buffer, 4400.0 + buffer, -1100.0 - buffer, 1100.0 + buffer)      # yellow defense
+        a = mark_forbidden_rect(a, -4400.0 - buffer, -3400.0 + buffer, -1100.0 - buffer, 1100.0 + buffer)    # blue defense
 
     # 3.b the four narrow edge strips (assumption explained above)
     # y in (-3000, -2900) and (2900, 3000)

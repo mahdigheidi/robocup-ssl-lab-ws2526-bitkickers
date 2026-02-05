@@ -8,74 +8,70 @@ class STATE(Enum):
 
     def update_stage(self,stage):
         print(stage)
-        match stage:
-            # prepare for game
-            case Stage.NORMAL_FIRST_HALF_PRE | Stage.EXTRA_FIRST_HALF_PRE :
-                return 
-            case Stage.NORMAL_SECOND_HALF_PRE | Stage.EXTRA_SECOND_HALF_PRE:
-                return 
-            
-            # first, second half
-            case Stage.NORMAL_FIRST_HALF | Stage.EXTRA_FIRST_HALF :
-                return 
-            case Stage.NORMAL_SECOND_HALF | Stage.EXTRA_SECOND_HALF :
-                return 
-            
-            # half time breaks
-            case Stage.NORMAL_HALF_TIME :
-                return 
-            case Stage.EXTRA_TIME_BREAK :
-                return 
-            case Stage.EXTRA_HALF_TIME :
-                return
-            
-            # Penalty 
-            case  Stage.PENALTY_SHOOTOUT_BREAK :
-                return 
-            case  Stage.PENALTY_SHOOTOUT :
-                return 
-            
-            # post game
-            case Stage.POST_GAME :
-                return 
+        if stage in (Stage.NORMAL_FIRST_HALF_PRE, Stage.EXTRA_FIRST_HALF_PRE):
+            return 
+        elif stage in (Stage.NORMAL_SECOND_HALF_PRE, Stage.EXTRA_SECOND_HALF_PRE):
+            return 
+        
+        # first, second half
+        elif stage in (Stage.NORMAL_FIRST_HALF, Stage.EXTRA_FIRST_HALF):
+            return 
+        elif stage in (Stage.NORMAL_SECOND_HALF, Stage.EXTRA_SECOND_HALF):
+            return 
+        
+        # half time breaks
+        elif stage == Stage.NORMAL_HALF_TIME:
+            return 
+        elif stage == Stage.EXTRA_TIME_BREAK:
+            return 
+        elif stage == Stage.EXTRA_HALF_TIME:
+            return
+        
+        # Penalty 
+        elif stage == Stage.PENALTY_SHOOTOUT_BREAK:
+            return 
+        elif stage == Stage.PENALTY_SHOOTOUT:
+            return 
+        
+        # post game
+        elif stage == Stage.POST_GAME:
+            return 
 
     
     def update_state(self,command):
         print(command) 
-        match command:
-            # basic
-            case Command.HALT:
-                return STATE.HALTED
-            case Command.STOP:
-                return STATE.STOPPED
-            case Command.NORMAL_START | Command.FORCE_START:
-                return STATE.RUNNING
-            
-            #timeout
-            case Command.TIMEOUT_BLUE:
-                return STATE.TIMEOUT
-            case Command.TIMEOUT_YELLOW:
-                return STATE.TIMEOUT
-            
-            case Command.PREPARE_KICKOFF_BLUE:
-                return
-            case Command.PREPARE_KICKOFF_YELLOW:
-                return
-            
-            case Command.DIRECT_FREE_BLUE | Command.INDIRECT_FREE_BLUE:
-                return
-            case Command.DIRECT_FREE_YELLOW | Command.INDIRECT_FREE_YELLOW:
-                return
+        if command == Command.HALT:
+            return STATE.HALTED
+        elif command == Command.STOP:
+            return STATE.STOPPED
+        elif command in (Command.NORMAL_START, Command.FORCE_START):
+            return STATE.RUNNING
+        
+        #timeout
+        elif command == Command.TIMEOUT_BLUE:
+            return STATE.TIMEOUT
+        elif command == Command.TIMEOUT_YELLOW:
+            return STATE.TIMEOUT
+        
+        elif command == Command.PREPARE_KICKOFF_BLUE:
+            return
+        elif command == Command.PREPARE_KICKOFF_YELLOW:
+            return
+        
+        elif command in (Command.DIRECT_FREE_BLUE, Command.INDIRECT_FREE_BLUE):
+            return
+        elif command in (Command.DIRECT_FREE_YELLOW, Command.INDIRECT_FREE_YELLOW):
+            return
 
-            # Ball placements
-            case Command.BALL_PLACEMENT_BLUE:
-                return
-            case Command.BALL_PLACEMENT_YELLOW:
-                return
-            
-            # Penalty
-            case Command.PREPARE_PENALTY_YELLOW:
-                return
-            case Command.PREPARE_PENALTY_BLUE:
-                return
+        # Ball placements
+        elif command == Command.BALL_PLACEMENT_BLUE:
+            return
+        elif command == Command.BALL_PLACEMENT_YELLOW:
+            return
+        
+        # Penalty
+        elif command == Command.PREPARE_PENALTY_YELLOW:
+            return
+        elif command == Command.PREPARE_PENALTY_BLUE:
+            return
             

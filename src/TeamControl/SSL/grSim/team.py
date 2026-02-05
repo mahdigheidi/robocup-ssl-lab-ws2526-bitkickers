@@ -3,9 +3,11 @@
 # ======================
 
 import time
+import sys
 import numpy as np
-
-from TeamControl.ball.ball_idle_spawner import BallIdleSpawner
+import random
+from typing import Optional
+from TeamControl.ball.ball_spawner import BallSpawner
 from TeamControl.network.ssl_sockets import grSimSender
 from TeamControl.ball.send_ball_grsim import send_ball_to_grsim
 
@@ -21,6 +23,7 @@ from TeamControl.robot.roles.goalie import Goalkeeper
 
 from TeamControl.robot.roles.passer import Passer
 
+from TeamControl.robot.roles.midfielder import Midfielder
 
 SIM_IP = "127.0.0.1"
 CMD_LISTEN_PORT = 20011
@@ -32,10 +35,37 @@ YELLOW_GOAL = np.array([4500.0, 0.0])
 BLUE_GOAL = np.array([-4500.0, 0.0])
 
 
+def spawn_ball_randomly_in_the_middle():
+    x = random.uniform(-0.5, 0.5)
+    y = random.uniform(-0.5, 0.5)
+    send_ball_to_grsim(x, y, 0, 0)
+    time.sleep(0.1)
+
+
 # MAIN TEAM PROCESS
 
 def team_control_process(wm: WorldModel):
     enable_logging()
+
+    # Determine which teams to run from command line arguments
+    # Default is both teams if neither or both are specified
+    run_yellow = True
+    run_blue = True
+    
+    args = [arg.lower() for arg in sys.argv]
+    if "yellow" in args and "blue" not in args:
+        run_blue = False
+    elif "blue" in args and "yellow" not in args:
+        run_yellow = False
+
+    if run_yellow:
+        print("Starting YELLOW team...")
+    if run_blue:
+        print("Starting BLUE team...")
+
+    # Initialize match standing
+    goal_count_blue = 0
+    goal_count_yellow = 0
 
     sender = grSimSender(
         ip=SIM_IP,
@@ -43,105 +73,85 @@ def team_control_process(wm: WorldModel):
         is_yellow=True,
     )
     blue_sender = grSimSender(
-    ip=SIM_IP,
-    port=CMD_LISTEN_PORT,
-    is_yellow=False,
+        ip=SIM_IP,
+        port=CMD_LISTEN_PORT,
+        is_yellow=False,
     )
 
+    spawner = BallSpawner(division=DIVISION)
 
-    spawner = BallIdleSpawner(division=DIVISION)
+    # Create yellow robots
+    robots = {}
+    if run_yellow:
+        goalie = Robot(robot_id=0, is_yellow=True, role=Goalkeeper())
+        defender = Robot(robot_id=1, is_yellow=True, role=Defender(home=(2200.0, -1000.0)))
+        midfielder = Robot(robot_id=2, is_yellow=True, role=Midfielder())
+        striker = Robot(robot_id=3, is_yellow=True, role=Striker(blue_goal=BLUE_GOAL))
 
-    # Create robots 
-   
-    goalie = Robot(
-        robot_id=0,
-        is_yellow=True,
-        role=Goalkeeper(),
-    )
+        robots = {
+            0: goalie,
+            1: defender,
+            2: midfielder,
+            3: striker,
+        }
 
-    defender = Robot(
-        robot_id=1,
-        is_yellow=True,
-        role=Defender(home=(2200.0, -1000.0)),
-    )
-
-    support = Robot(
-        robot_id=2,
-        is_yellow=True,
-        role=Support(),
-    )
-
-    striker = Robot(
-        robot_id=3,
-        is_yellow=True,
-        role=Striker(blue_goal=BLUE_GOAL),
-    )
-
-    robots = {
-        0: goalie,
-        1: defender,
-        2: support,
-        3: striker,
-    }
-
-    # Spawn robots
-  
-    goalie.spawn(x=4500, y=0, orientation=np.pi)
-    time.sleep(0.05)
-
-    defender.spawn(x=2500, y=0, orientation=0.0)
-    time.sleep(0.05)
-
-    support.spawn(x=0, y=0, orientation=0.0)
-    time.sleep(0.05)
-
-    striker.spawn(x=-2500, y=0, orientation=0.0)
-    time.sleep(0.05)
-
-    blue_goalie = None
-    #blue_striker = None
-    blue_robots = {}
-    # Spawn blue goalie for testing purposes
-    try:
-        blue_goalie = Robot(
-            robot_id=0,
-            is_yellow=False,
-            role=Goalkeeper(),
-        )
-        """blue_striker = Robot(
-            robot_id=3,
-            is_yellow=False,
-            role=Striker(),
-
-        )"""
-        blue_goalie.spawn(x=-4500, y=0, orientation=0.0)
-       # blue_striker.spawn(x=-2500, y=0, orientation=np.pi)
-        blue_robots = {0: blue_goalie} #, 3: blue_striker}
+        # Spawn robots
+        goalie.spawn(x=4500, y=0, orientation=np.pi)
+        time.sleep(0.05)
+        defender.spawn(x=3000, y=0, orientation=0.0)
+        time.sleep(0.05)
+        midfielder.spawn(x=1000, y=0, orientation=0.0)
+        time.sleep(0.05)
+        striker.spawn(x=-2500, y=0, orientation=0.0)
         time.sleep(0.05)
 
-    except Exception as e:
-        print("Blue team spawn failed:", e)
+        # Initial phases
+        striker.switch_phase(Striker.Phase.RECEIVING)
+        goalie.switch_phase(Goalkeeper.Phase.ACTIVE)
+        defender.switch_phase(Defender.Phase.CHASING)
+        midfielder.switch_phase(Midfielder.Phase.CHASING)
 
+    blue_robots = {}
+    if run_blue:
+        # Create blue robots
+        try:
+            blue_goalie = Robot(robot_id=0, is_yellow=False, role=Goalkeeper())
+            blue_defender = Robot(robot_id=1, is_yellow=False, role=Defender())
+            blue_midfielder = Robot(robot_id=2, is_yellow=False, role=Midfielder())
+            blue_striker = Robot(robot_id=3, is_yellow=False, role=Striker())
+
+            blue_goalie.spawn(x=-4500, y=0, orientation=0.0)
+            time.sleep(0.05)
+            blue_defender.spawn(x=-3000, y=0, orientation=0.0)
+            time.sleep(0.05)
+            blue_midfielder.spawn(x=-2000, y=0, orientation=0.0)
+            time.sleep(0.05)
+            blue_striker.spawn(x=2500, y=0, orientation=0.0)
+            time.sleep(0.05)
+
+            blue_robots = {
+                0: blue_goalie,
+                1: blue_defender,
+                2: blue_midfielder,
+                3: blue_striker
+            }
+
+            # Initial phases
+            blue_striker.switch_phase(Striker.Phase.RECEIVING)
+            blue_goalie.switch_phase(Goalkeeper.Phase.ACTIVE)
+            blue_defender.switch_phase(Defender.Phase.CHASING)
+            blue_midfielder.switch_phase(Midfielder.Phase.CHASING)
+
+        except Exception as e:
+            print("Blue team spawn failed:", e)
 
     # Spawn ball
     send_ball_to_grsim(0.0, 0.0, 0.0, 0.0)
-    time.sleep(0.05)
 
     # World state
-   
     world_state = WorldState()
     version = 0
     last_time = time.time()
-
-    # Initial phases
- 
-    goalie.switch_phase(Goalkeeper.Phase.ACTIVE)
-    defender.switch_phase(Defender.Phase.CHASING)
-    striker.switch_phase(Striker.Phase.RECEIVING)
-    support.switch_phase(Support.Phase.CHASING)
-    #blue_striker.switch_phase(Striker.Phase.RECEIVING)
-    blue_goalie.switch_phase(Goalkeeper.Phase.ACTIVE)
-
 
     # MAIN LOOP
   
@@ -179,7 +189,28 @@ def team_control_process(wm: WorldModel):
                 world_state=world_state,
                 sender=blue_sender,
                 spawner=spawner,
-              
             )
+
+        # ------------   CHECK FOR GOAL (DO NOT CHANGE)  ------------
+        ball_pos = world_state.ball.position
+        goal_y_min = -spawner.goal_width / 2
+        goal_y_max = spawner.goal_width / 2
+        
+        if (ball_pos[0] >= spawner.goal_line_x and goal_y_min <= ball_pos[1] <= goal_y_max):
+            goal_count_blue += 1
+            print(f"Blue Team scored a GOAL !!!!!")
+            print(f"Blue Team Goals: {goal_count_blue}")
+            print(f"Yellow Team Goals: {goal_count_yellow}")
+            spawn_ball_randomly_in_the_middle()
+
+        elif (ball_pos[0] <= -spawner.goal_line_x and goal_y_min <= ball_pos[1] <= goal_y_max):
+            goal_count_yellow += 1
+            print(f"Yellow Team scored a GOAL !!!!!")
+            print(f"Yellow Team Goals: {goal_count_yellow}")
+            print(f"Blue Team Goals: {goal_count_blue}")
+            spawn_ball_randomly_in_the_middle()
+
+        elif not spawner.is_ball_in_field(ball_pos):
+            spawn_ball_randomly_in_the_middle()
 
         #time.sleep(0.02)

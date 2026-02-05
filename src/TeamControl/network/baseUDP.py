@@ -184,17 +184,16 @@ class BaseSocket():
             ValueError: If the IP cannot be obtained automatically.
         """
         os_system = sys.platform
-        match os_system:
-            case 'win32':
-                ip = socket.gethostbyname(socket.gethostname())
-            case 'linux':
-                ip = os.popen('hostname -I').read().strip().split(" ")[0]
-                # ip = os.popen('hostname -I').read().strip().split(" ")[1] # for jetsons
-                print(f'available : {os.popen("hostname -I").read().strip().split(" ")} , using : {ip}')
-            case 'darwin':
-                ip = os.popen('ipconfig getifaddr en0').read().strip()
-            case _:
-                raise ValueError("Cannot obtain IP, please input ip address manually")       
+        if os_system == 'win32':
+            ip = socket.gethostbyname(socket.gethostname())
+        elif os_system == 'linux':
+            ip = os.popen('hostname -I').read().strip().split(" ")[0]
+            # ip = os.popen('hostname -I').read().strip().split(" ")[1] # for jetsons
+            print(f'available : {os.popen("hostname -I").read().strip().split(" ")} , using : {ip}')
+        elif os_system == 'darwin':
+            ip = os.popen('ipconfig getifaddr en0').read().strip()
+        else:
+            raise ValueError("Cannot obtain IP, please input ip address manually")       
         return ip
     
     @staticmethod

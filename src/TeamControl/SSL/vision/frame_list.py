@@ -1,3 +1,4 @@
+from __future__ import annotations
 from TeamControl.SSL.vision.frame import Frame
 from collections import deque
 

@@ -109,18 +109,16 @@ class WorldModel:
             - PacketType.BLF_LOCATION
         """
         type, data = packet[0],packet[1]
-        match type:
-            case PacketType.ROBOTS_ACTIVE:
-                self.update_robots_active(data)
-            case PacketType.NEW_STATE:
-                self.update_state(data)
-            case PacketType.SWITCH_TEAM :
-                self.update_team(data["YELLOW"],data["POSITIVE"])
-            case PacketType.BLF_LOCATION:
-                self.update_ball_left_field_location(data)
-            
-            case _: # if the packet type is unknown 
-                log.exception(f"undefined {type=}, {data=}")
+        if type == PacketType.ROBOTS_ACTIVE:
+            self.update_robots_active(data)
+        elif type == PacketType.NEW_STATE:
+            self.update_state(data)
+        elif type == PacketType.SWITCH_TEAM:
+            self.update_team(data["YELLOW"], data["POSITIVE"])
+        elif type == PacketType.BLF_LOCATION:
+            self.update_ball_left_field_location(data)
+        else:
+            log.exception(f"undefined {type=}, {data=}")
             
     def update_robots_active(self, new_active:int): 
         """Update the number of active robots on the field."""

@@ -1,27 +1,20 @@
 #stiker role
-
 from enum import Enum, auto
 import time
 import logging
 from TeamControl.obstacles.helpers import RoleArea, check_possession
-
 from TeamControl.robot import context
 from TeamControl.robot.phases.ball_handling import is_path_blocked
 from TeamControl.robot.roles import goalie
 import numpy as np
-
-
 from TeamControl.robot.role import Role
 from TeamControl.robot.context import RobotContext
 from TeamControl.utils.state_machine import StateMachine
-
 from TeamControl.robot.phases.basic import (
     HoldPositionFaceBallStateMachine,
     InterceptionStateMachine,
     ShadowBallStateMachine
 )
-
-
 from TeamControl.robot.phases import (
     ReceivingStateMachine,
     ChasingBallStateMachine,
@@ -35,14 +28,15 @@ BALL_DIRECTION_DOT_THRESHOLD = 0.3
 GOALIE_HOLD_TIME = 1.0
 
 STRIKER_AREA = RoleArea(
-    x_min=-4400.0,
-    x_max=-1400.0,
+    x_min=-4500.0,
+    x_max=-1500.0,
     y_min=-2900.0,
     y_max=2900.0,
-    defense_x=-3400.0,      # goal box edge
-    defense_y_half=1100.0,
+    defense_x=-3450.0, # goal box edge
+    defense_y_half=1050.0,
 )
 
+ROLE_AREA = STRIKER_AREA
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +66,7 @@ class Striker(Role):
         self._possession_start = None
         self._goalie_hold_start = None
         self.blue_goal = blue_goal
+        self._force_center = False
 
     def get_initial_phase(self):
         return self.Phase.CHASING
@@ -80,22 +75,22 @@ class Striker(Role):
     def create_phase_machine(self, phase):
 
         if phase == self.Phase.RECEIVING:
-            return ReceivingStateMachine()
+            return ReceivingStateMachine(ROLE_AREA)
 
         if phase == self.Phase.PLAY:
-            return StrikerStateMachine()
+            return StrikerStateMachine(ROLE_AREA)
 
         if phase == self.Phase.CHASING:
-            return ChasingBallStateMachine()
+            return ChasingBallStateMachine(ROLE_AREA)
 
-        if phase == self.Phase.HOLD:
-            return HoldPositionFaceBallStateMachine(self.home)
+       # if phase == self.Phase.HOLD:
+           # return HoldPositionFaceBallStateMachine(self.home)
 
         if phase == self.Phase.INTERCEPT:
             return InterceptionStateMachine(STRIKER_AREA)
         
         if phase == self.Phase.KICK_TO_GOAL:
-            return KickToGoalStateMachine()
+            return KickToGoalStateMachine(ROLE_AREA, force_center=self._force_center)
         if phase == self.Phase.SHADOW:
             return ShadowBallStateMachine(STRIKER_AREA)
 
@@ -118,57 +113,93 @@ class Striker(Role):
 
 
 
-# ============================================================================
 # Phase Update Logic
-# ============================================================================
+
     def update_phase(self, robot, context: RobotContext):
         
         bx, by = context.ball.position[:2]
-        ball_legal =  STRIKER_AREA.is_point_legal(context, bx, by)
+        ball_legal = STRIKER_AREA.is_point_legal(context, bx, by)
         
+        teammate_has_ball = any(
+            check_possession(context.ball.position, t.position)
+            for t in context.teammates.values()
+        )
 
-        # 5) Default → CHASING
-        if ball_legal:
+        opponent_has_ball = any(
+            check_possession(context.ball.position, o.position)
+            for o in context.opponents.values()
+        )
+        ball_speed = np.linalg.norm(context.ball.velocity)
 
-            if robot.current_phase != self.Phase.CHASING:
-                logger.info("Striker: default → CHASING")
-                robot.switch_phase(self.Phase.CHASING)
-        
-        # 1) We have the ball → PLAY
-        if context.has_possession:
-            if robot.current_phase != self.Phase.KICK_TO_GOAL:
-                logger.info("Striker: has ball → KICK_TO_GOAL")
-                robot.switch_phase(self.Phase.KICK_TO_GOAL)
-            return
-         
+        # --------------------------------------------------
+        # Conflict Resolution: Multiple robots with ball
+        # --------------------------------------------------
+        my_dist = np.linalg.norm(context.my_state.position[:2] - context.ball.position[:2])
+        is_near_ball = my_dist < 180.0
 
-        # 4) Teammate has ball → RECEIVING
-        if any(check_possession(context.ball.position, t.position)
-               for t in context.teammates.values()):
+        if is_near_ball:
+            if self._possession_start is None:
+                self._possession_start = time.time()
             
-            if robot.current_phase != self.Phase.RECEIVING:
-                logger.info("Striker: teammate has ball → RECEIVING")
+            # Check for ANY teammate also near the ball
+            conflicting_teammates = []
+            for t_id, t in context.teammates.items():
+                t_dist = np.linalg.norm(t.position[:2] - context.ball.position[:2])
+                if t_dist < 200.0: # teammate is also near/contesting
+                    conflicting_teammates.append(t_id)
 
+            if conflicting_teammates:
+                # If conflict lasts > 1.5s, robot with higher ID leaves
+                if time.time() - self._possession_start > 1.5:
+                    if any(t_id < context.robot_id for t_id in conflicting_teammates):
+                        if robot.current_phase != self.Phase.INTERCEPT:
+                            robot.switch_phase(self.Phase.INTERCEPT)
+                        return
+        else:
+            if not context.has_possession:
+                self._possession_start = None
+
+        if teammate_has_ball:
+            if robot.current_phase != self.Phase.RECEIVING:
                 robot.switch_phase(self.Phase.RECEIVING)
             return
         
-        # 2) Opponent goalie has possession → INTERCEPT
-        if self.opp_goalie_has_ball(context):
+        if context.has_possession:
+            # Fallback: if held for > 3s in any state, ensure we are in KICK_TO_GOAL
+            if self._possession_start is not None and (time.time() - self._possession_start > 3.0):
+                self._force_center = True
+                if robot.current_phase != self.Phase.KICK_TO_GOAL:
+                    robot.switch_phase(self.Phase.KICK_TO_GOAL)
+                return
+            
+            # Reset force_center if we just entered possession or are within normal time
+            if self._possession_start is not None and (time.time() - self._possession_start <= 3.0):
+                self._force_center = False
 
+            if robot.current_phase != self.Phase.KICK_TO_GOAL:
+                robot.switch_phase(self.Phase.KICK_TO_GOAL)
+            return
+
+        if ball_speed > 500.0 or self.opp_goalie_has_ball(context) or opponent_has_ball:
             if robot.current_phase != self.Phase.INTERCEPT:
-                logger.info("Striker: opponent goalie has ball → INTERCEPT")
-
                 robot.switch_phase(self.Phase.INTERCEPT)
             return
 
-
-
-         # stable_has_ball = self.stable_has_ball(context)
-        if not ball_legal:
-            if robot.current_phase != self.Phase.SHADOW:
-
-                logger.info("Striker: ball illegal → SHADOW")
-
+        if ball_legal:
+            my_dist = np.linalg.norm(context.my_state.position[:2] - context.ball.position[:2])
+            closest = True
+            for t_id, t in context.teammates.items():
+                t_dist = np.linalg.norm(t.position[:2] - context.ball.position[:2])
+                if t_dist < my_dist or (abs(t_dist - my_dist) < 2.0 and t_id < context.robot_id):
+                    closest = False
+                    break
+            
+            if closest:
+                if robot.current_phase != self.Phase.CHASING:
+                    robot.switch_phase(self.Phase.CHASING)
+                return
+            
+            
+        if robot.current_phase != self.Phase.SHADOW:
             robot.switch_phase(self.Phase.SHADOW)
-            return
    

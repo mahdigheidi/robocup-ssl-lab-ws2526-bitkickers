@@ -1,3 +1,4 @@
+from typing import Optional
 import numpy as np
 
 
@@ -137,7 +138,7 @@ class Team ():
     def __repr__(self):
         return f"{self.isYellow=} : {self.num_robots=} \n {self.active=}"
     
-    def get_robot(self, robot_id: int) -> Robot | None:
+    def get_robot(self, robot_id: int) -> Optional[Robot]:
         if 0 <= robot_id < 16:
             return self._robots[robot_id] if isinstance(self._robots[robot_id], Robot) else None
         return None

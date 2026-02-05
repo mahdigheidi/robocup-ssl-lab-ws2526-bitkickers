@@ -107,27 +107,20 @@ class RobotMovement:
         differential_gain: float = 0.01,
         differential_low_pass: float = 0.5,
         stop_threshold: float = 1.0,  # mm
-       
+        static_obstacles: list[tuple[float, float]] | None = None,
+        dynamic_obstacles: list[tuple[tuple[float, float], tuple[float, float]]] | None = None,
     ) -> tuple[float, float]:
         """
         Calculate the velocity (vx, vy) for the robot to move towards a target position.
-
-        Args:
-            robot_pos (tuple[float, float, float]): Robot's current position (x, y, theta) in world coordinates.
-            target (tuple[float, float]): Target position in world coordinates.
-            kicker_to_target: True for kicker to target position, False for robot center to target position.
-            max_speed: Maximum linear speed in mm/s
-            max_acceleration: Maximum linear acceleration in mm/s^2
-            kicker_offset: Offset distance for kicker (mm)
-            proportional_gain: P gain for position control
-            differential_gain: D gain for position control
-            differential_low_pass: Low-pass filter for position derivative
-            stop_threshold: Distance threshold below which robot stops (mm)
-            allow: Whether to allow movement into defense area
-        Returns:
-            tuple[float, float]: Velocity components (vx, vy) in m/s.
         """
         x, y, theta = robot_pos
+
+        # --- BOUNDARY ENFORCEMENT ---
+        # Ensure robot center stays inside field with enough room for its body
+        buffer = ROBOT_RADIUS + 15.0 # Increased buffer to 103.5mm
+        tx = float(np.clip(target[0], -4500.0 + buffer, 4500.0 - buffer))
+        ty = float(np.clip(target[1], -3000.0 + buffer, 3000.0 - buffer))
+        target_xy = (tx, ty)
 
         if kicker_to_target:
             # Apply kicker offset in the robot's facing direction
@@ -135,34 +128,24 @@ class RobotMovement:
             y += kicker_offset * math.sin(theta)
 
         # Convert target from world coordinates to robot coordinates
-        dx, dy = world2robot((x, y, theta), target)  # type: ignore
+        # dx, dy = world2robot((x, y, theta), target_xy) # type: ignore
         
         # -------------------------------
         # OBSTACLE-AWARE TARGET SELECTION
         # -------------------------------
-        target_xy = (float(target[0]), float(target[1]))
-
-        # Collect obstacles from context if provided
-        static_obstacles = []
-        dynamic_obstacles = []
-
-        if "static_obstacles" in locals():
-            static_obstacles = locals()["static_obstacles"]
-
-        if "dynamic_obstacles" in locals():
-            dynamic_obstacles = locals()["dynamic_obstacles"]
+        static_obs = static_obstacles or []
+        dynamic_obs = dynamic_obstacles or []
 
         # Replan path if needed
-        if target_xy != self._path_goal or time.time() - self._last_plan_time > 1.0:
+        if target_xy != self._path_goal or time.time() - self._last_plan_time > 0.5: # More frequent replanning
             try:
                 self._path = preprocess_best_path(
                     start=(x, y),
                     goal=target_xy,
-                    static_obstacles=static_obstacles,
-                    dynamic_obstacles=dynamic_obstacles,
+                    static_obstacles=static_obs,
+                    dynamic_obstacles=dynamic_obs,
                     allow_defense=self.allow_defense_area,
                     is_yellow=context.is_yellow,
-                    
                 )
                 self._path_goal = target_xy
                 self._path_index = 0

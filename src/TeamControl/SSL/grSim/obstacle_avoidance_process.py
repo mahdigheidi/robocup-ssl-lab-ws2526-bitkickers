@@ -117,7 +117,8 @@ def obstacle_avoidance_process(wm):
             static_robots=static_robots_pos,
             dynamic_robots=dynamic_robots_pos,
             elapsed_time=time.time() - start_time,
-            time_limit=TIME_LIMIT
+            time_limit=TIME_LIMIT,
+            is_yellow=IS_YELLOW,
         )
         if stop:
             print(message)

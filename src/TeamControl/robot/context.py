@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Robot context and world state - shared data structures for robot state machines."""
 
 from dataclasses import dataclass
@@ -8,11 +9,7 @@ from typing import Optional
 
 if TYPE_CHECKING:
     from TeamControl.world.model import WorldModel
-
-
-# =============================================================================
 # Configuration Constants
-# =============================================================================
 
 POSSESSION_THRESHOLD = 120  # mm - distance threshold for ball possession
 
@@ -69,6 +66,114 @@ class RobotContext:
             raise ValueError(
                 f"ball.position must have shape (2,), got {self.ball.position.shape}"
             )
+
+
+@dataclass(frozen=True)
+class RoleArea:
+    x_min: float
+    x_max: float
+    y_min: float
+    y_max: float
+    defense_x: float | None = None
+    defense_y_half: float | None = None
+
+    def for_team(self, is_yellow: bool) -> "RoleArea":
+        if is_yellow:
+            return self
+        
+        xmin = -self.x_max
+        xmax = -self.x_min
+
+        return RoleArea(
+            x_min=min(xmin, xmax),
+            x_max=max(xmin, xmax),
+            y_min=self.y_min,
+            y_max=self.y_max,
+            defense_x=(
+                -self.defense_x if self.defense_x is not None else None
+            ),
+            defense_y_half=self.defense_y_half,
+        )
+
+    def is_point_legal(self, context: "RobotContext", x: float, y: float, is_goalie: bool = False) -> bool:
+        from TeamControl.obstacles.helpers import defense_area_polygon_for_team
+        from shapely.geometry import Point, Polygon
+        
+        area = self.for_team(context.is_yellow)
+
+        # 1) Rectangle bounds
+        if not (
+            area.x_min <= x <= area.x_max
+            and area.y_min <= y <= area.y_max
+        ):
+            return False
+
+        # 2) Defense exclusion (unless goalie)
+        if not is_goalie:
+            # Own defense area
+            own_poly = Polygon(defense_area_polygon_for_team(context.is_yellow))
+            if Point(x, y).within(own_poly):
+                return False
+            
+            # Opponent defense area
+            opp_poly = Polygon(defense_area_polygon_for_team(not context.is_yellow))
+            if Point(x, y).within(opp_poly):
+                return False
+
+        return True
+
+    def project_to_legal_area(
+        self,
+        context: "RobotContext",
+        x: float,
+        y: float,
+        is_goalie: bool = False,
+    ) -> np.ndarray:
+        """
+        Projects (x, y) into the nearest legal point inside the role area and within field.
+        """
+        from TeamControl.obstacles.helpers import defense_area_polygon_for_team, ROBOT_RADIUS
+        from shapely.geometry import Point, Polygon
+        
+        area = self.for_team(context.is_yellow)
+        
+        # Buffer to keep robot body inside field
+        buffer = ROBOT_RADIUS + 10.0 # extra 10mm margin
+        
+        # 1) Clamp to field boundaries with buffer
+        fx_min = -4500.0 + buffer
+        fx_max = 4500.0 - buffer
+        fy_min = -3000.0 + buffer
+        fy_max = 3000.0 - buffer
+        
+        x = float(np.clip(x, fx_min, fx_max))
+        y = float(np.clip(y, fy_min, fy_max))
+
+        # 2) Clamp to role area rectangle
+        cx = float(np.clip(x, area.x_min, area.x_max))
+        cy = float(np.clip(y, area.y_min, area.y_max))
+
+        # 3) If inside a defense area and not allowed, push out
+        if not is_goalie:
+            # Check own defense
+            own_poly = Polygon(defense_area_polygon_for_team(context.is_yellow))
+            if Point(cx, cy).buffer(buffer).intersects(own_poly):
+                # Push x away from goal
+                if context.is_yellow:
+                    cx = min(cx, 3500.0 - buffer) 
+                else:
+                    cx = max(cx, -3500.0 + buffer)
+            
+            # Check opponent defense
+            opp_poly = Polygon(defense_area_polygon_for_team(not context.is_yellow))
+            if Point(cx, cy).buffer(buffer).intersects(opp_poly):
+                # Push x away from opponent goal
+                if context.is_yellow:
+                    cx = max(cx, -3500.0 + buffer)
+                else:
+                    cx = min(cx, 3500.0 - buffer)
+
+        return np.array([cx, cy], dtype=float)
 
 
 class WorldState:

@@ -83,6 +83,7 @@ class Robot(Generic[R]):
     
     @property
     def current_state_name(self) -> str:
+        
         """Get the name of the current state in the active phase machine."""
         return self._phase_machine.get_current_state().__class__.__name__
 
@@ -106,8 +107,9 @@ class Robot(Generic[R]):
         context = world_state.get_robot_context(self.robot_id, self.is_yellow)
        
 
-    # 2. ROLE decides phase transitions (ADD THIS BLOCK)
+         # ROLE decides phase transitions
         if hasattr(self.role, "update_phase"):
             self.role.update_phase(self,context)
+
         # Execute current phase's state machine
         self._phase_machine.execute(context, sender=sender, movement=self.movement, **kwargs)

@@ -1,3 +1,4 @@
+from __future__ import annotations
 """ Receiver - Socket
 This file includes : 
 1. Receiver - Basic UDP receiver w/ Recieving Functions (exc. sending)

@@ -63,23 +63,32 @@ def main():
     wm_manager = WorldModelManager()
     wm_manager.start()
     wm = wm_manager.WorldModel() # type: ignore
+    #wm = wm_manager.get_world_model()
+
+    #print("WM object id:", id(wm))
+
     
     # World model runner process
     wmr = Process(target=wm_runner, args=(wm,vision_q,gc_q,))
+    #print("WM runner object id:", id(wmr))
+
 
     # Sandbox process for sending commands to grSim
-    # sandbox = Process(target=sandbox_process, args=(wm,))
+    #sandbox = Process(target=sandbox_process, args=(wm,))
     team = Process(target=team_control_process, args=(wm,)) 
-    # Start all processes
+   
     vision_wkr.start()
     wmr.start()
-    # sandbox.start()
+  
+    #sandbox.start()
     team.start()
     # some_other_process2.start()
     
     # Wait for all processes to finish
     vision_wkr.join()
     wmr.join()
+ 
+    #sandbox.join()
   
     team.join()
     # some_other_process2.join()
