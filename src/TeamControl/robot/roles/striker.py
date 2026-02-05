@@ -8,7 +8,7 @@ from TeamControl.robot.phases.ball_handling import is_path_blocked
 from TeamControl.robot.roles import goalie
 import numpy as np
 from TeamControl.robot.role import Role
-from TeamControl.robot.context import RobotContext
+from TeamControl.robot.context import RobotContext, teammate_can_chase_ball
 from TeamControl.utils.state_machine import StateMachine
 from TeamControl.robot.phases.basic import (
     HoldPositionFaceBallStateMachine,
@@ -189,6 +189,9 @@ class Striker(Role):
             my_dist = np.linalg.norm(context.my_state.position[:2] - context.ball.position[:2])
             closest = True
             for t_id, t in context.teammates.items():
+                # Only compare against teammates whose zone also contains the ball
+                if not teammate_can_chase_ball(t_id, bx, by, context.is_yellow):
+                    continue
                 t_dist = np.linalg.norm(t.position[:2] - context.ball.position[:2])
                 if t_dist < my_dist or (abs(t_dist - my_dist) < 2.0 and t_id < context.robot_id):
                     closest = False

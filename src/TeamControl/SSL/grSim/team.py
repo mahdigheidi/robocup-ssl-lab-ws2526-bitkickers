@@ -59,7 +59,7 @@ def team_control_process(wm: WorldModel):
     parser.add_argument("ip", type=str, nargs='?', default="127.0.0.1", help="grSim IP address")
     parser.add_argument("--yellow", action="store_true", help="Control only yellow team")
     parser.add_argument("--blue", action="store_true", help="Control only blue team")
-    parser.add_argument("--dev", action="store_true", help="Send ball commands (do not enable in competition!)")
+    parser.add_argument("--ball", action="store_true", help="Send ball commands (do not enable in competition!)")
 
     parsed_args = parser.parse_args()
 
@@ -71,8 +71,7 @@ def team_control_process(wm: WorldModel):
     # Determine which teams to run based on parsed arguments
     run_blue = not parsed_args.yellow
     run_yellow = not parsed_args.blue
-
-    dev_mode = parsed_args.dev
+    run_ball = parsed_args.ball
 
 
     if run_yellow:
@@ -161,7 +160,7 @@ def team_control_process(wm: WorldModel):
             print("Blue team spawn failed:", e)
 
     # Spawn ball
-    if dev_mode:
+    if run_ball:
         send_ball_to_grsim(0.0, 0.0, 0.0, 0.0)
 
     # World state
@@ -215,7 +214,7 @@ def team_control_process(wm: WorldModel):
             print(f"Blue Team scored a GOAL !!!!!")
             print(f"Blue Team Goals: {goal_count_blue}")
             print(f"Yellow Team Goals: {goal_count_yellow}")
-            if dev_mode:
+            if run_ball:
                 spawn_ball_randomly_in_the_middle()
 
         elif ball_pos[0] <= -spawner.goal_line_x and goal_y_min <= ball_pos[1] <= goal_y_max:
@@ -223,11 +222,11 @@ def team_control_process(wm: WorldModel):
             print(f"Yellow Team scored a GOAL !!!!!")
             print(f"Yellow Team Goals: {goal_count_yellow}")
             print(f"Blue Team Goals: {goal_count_blue}")
-            if dev_mode:
+            if run_ball:
                 spawn_ball_randomly_in_the_middle()
 
         elif not spawner.is_ball_in_field(ball_pos):
-            if dev_mode:
+            if run_ball:
                 spawn_ball_randomly_in_the_middle()
 
         # time.sleep(0.02)

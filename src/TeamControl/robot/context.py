@@ -68,6 +68,46 @@ class RobotContext:
             )
 
 
+# Role area definitions for each robot ID (excluding goalie=0 who has special rules)
+# These must match the areas defined in each role file
+_ROLE_AREAS_BY_ID: dict[int, "RoleArea"] = {}  # Populated after RoleArea is defined
+
+
+def _init_role_areas():
+    """Initialize role area mappings after RoleArea class is defined."""
+    global _ROLE_AREAS_BY_ID
+    _ROLE_AREAS_BY_ID = {
+        1: RoleArea(x_min=1500.0, x_max=4500.0, y_min=-2900.0, y_max=2900.0),  # Defender
+        2: RoleArea(x_min=-1500.0, x_max=1500.0, y_min=-2900.0, y_max=2900.0),  # Midfielder
+        3: RoleArea(x_min=-4500.0, x_max=-1500.0, y_min=-2900.0, y_max=2900.0),  # Striker
+    }
+
+
+def teammate_can_chase_ball(teammate_id: int, ball_x: float, ball_y: float, is_yellow: bool) -> bool:
+    """
+    Check if a teammate's role area contains the ball position.
+    Used to filter "closest" checks - only compare against teammates who could actually chase.
+    
+    Args:
+        teammate_id: Robot ID of the teammate
+        ball_x, ball_y: Ball position
+        is_yellow: True if yellow team
+        
+    Returns:
+        True if the teammate's zone contains the ball (and thus they could chase it)
+    """
+    if teammate_id == 0:  # Goalie never chases
+        return False
+    if teammate_id not in _ROLE_AREAS_BY_ID:
+        return False
+    
+    area = _ROLE_AREAS_BY_ID[teammate_id].for_team(is_yellow)
+    
+    # Simple bounds check (don't need full is_point_legal with defense area checks)
+    return (area.x_min <= ball_x <= area.x_max and 
+            area.y_min <= ball_y <= area.y_max)
+
+
 @dataclass(frozen=True)
 class RoleArea:
     x_min: float
@@ -174,6 +214,10 @@ class RoleArea:
                     cx = min(cx, 3500.0 - buffer)
 
         return np.array([cx, cy], dtype=float)
+
+
+# Initialize role area mappings now that RoleArea is defined
+_init_role_areas()
 
 
 class WorldState:
