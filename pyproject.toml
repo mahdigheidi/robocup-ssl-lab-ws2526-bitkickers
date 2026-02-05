@@ -13,7 +13,8 @@ dependencies = [
     "tqdm",
     "protobuf",
     "shapely",
-    "PyYAML"
+    "PyYAML",
+    "tensordict>=0.11.0",
 ]
 
 dynamic = [
