@@ -17,7 +17,8 @@ Queues:
     - gc_q: Placeholder queue for game controller events (currently unused).
 """
 
-from multiprocessing import Process, Queue,Event
+from multiprocessing import Process, Queue, Event
+from TeamControl.SSL.grSim.competition_rules_process import competition_example_process
 from TeamControl.SSL.vision.Process import vision_worker
 from TeamControl.world.model_manager import WorldModelManager
 from TeamControl.world.model_runner import wm_runner
@@ -30,6 +31,7 @@ from TeamControl.SSL.grSim.interceptor_process import interceptor_process
 from TeamControl.SSL.grSim.team import team_control_process
 
 # in multiprocessing this can only be a simple process
+
 
 def main():
     """
@@ -54,44 +56,48 @@ def main():
 
     # Queues for inter-process communication
     vision_q = Queue()
-    gc_q = Queue() # placeholder for game controller
-    
+    gc_q = Queue()  # placeholder for game controller
+
     # Initialize and start vision worker
-    vision_wkr = Process(target=vision_worker, args=(vision_q,True,vision_port,))
+    vision_wkr = Process(
+        target=vision_worker,
+        args=(
+            vision_q,
+            True,
+            vision_port,
+        ),
+    )
 
     # Initialize world model managersand
     wm_manager = WorldModelManager()
     wm_manager.start()
-    wm = wm_manager.WorldModel() # type: ignore
-    #wm = wm_manager.get_world_model()
+    wm = wm_manager.WorldModel()  # type: ignore
 
-    #print("WM object id:", id(wm))
-
-    
     # World model runner process
-    wmr = Process(target=wm_runner, args=(wm,vision_q,gc_q,))
-    #print("WM runner object id:", id(wmr))
-
+    wmr = Process(
+        target=wm_runner,
+        args=(
+            wm,
+            vision_q,
+            gc_q,
+        ),
+    )
 
     # Sandbox process for sending commands to grSim
-    #sandbox = Process(target=sandbox_process, args=(wm,))
-    team = Process(target=team_control_process, args=(wm,)) 
-   
+    # sandbox = Process(target=sandbox_process, args=(wm,))
+    team = Process(target=team_control_process, args=(wm,))
+    # competition = Process(target=competition_example_process, args=(wm,))
+    # Start all processes
     vision_wkr.start()
     wmr.start()
-  
-    #sandbox.start()
+    # competition.start()
     team.start()
-    # some_other_process2.start()
-    
     # Wait for all processes to finish
     vision_wkr.join()
     wmr.join()
- 
-    #sandbox.join()
-  
     team.join()
-    # some_other_process2.join()
+    # competition.join()
+    
 
 if __name__ == "__main__":
     main()
