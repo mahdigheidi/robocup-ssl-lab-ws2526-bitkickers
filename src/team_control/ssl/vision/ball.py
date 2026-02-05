@@ -15,3 +15,8 @@ class Ball:
     @property
     def position(self):
         return np.array([self.x, self.y], dtype=np.float32)
+
+    def gen_position(self, is_yellow):
+        if is_yellow:
+            return np.array([self.x, self.y], dtype=np.float32)
+        return np.array([-self.x, -self.y], dtype=np.float32)

@@ -1,4 +1,5 @@
 import numpy as np
+import math
 
 
 class Robot:
@@ -37,6 +38,12 @@ class Robot:
             np.ndarray: [x, y, o] in float32.
         """
         return np.array([self.x, self.y, self.o], dtype=np.float32)
+
+    @property
+    def gen_position(self) -> np.dtype:
+        if self.is_yellow:
+            return np.array([self.x, self.y, self.o], dtype=np.float32)
+        return np.array([-self.x, -self.y, (self.o+math.pi)%(2 * math.pi)], dtype=np.float32)
 
     # def __lt__(self,other):
     #     return self.id < other.id

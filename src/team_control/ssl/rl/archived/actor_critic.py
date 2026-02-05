@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from team_control.ssl.rl.twohot import two_hot_decode
-from team_control.ssl.rl.encoder import Encoder
+from team_control.ssl.rl.archived.encoder import Encoder
 
 
 EMBEDDING_SIZE = 256

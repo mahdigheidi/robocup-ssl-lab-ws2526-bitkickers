@@ -35,7 +35,7 @@ class RobotCommand():
             vx: float = 0.0,
             vy: float = 0.0,
             w: float = 0.0,
-            kick: int = 0,
+            kick: float = 0,
             dribble: int = 0,
             time_origin: float = 0.0):
         """
@@ -46,7 +46,7 @@ class RobotCommand():
             vx (float): Desired X velocity.
             vy (float): Desired Y velocity.
             w (float): Desired angular velocity.
-            kick (int): Kick command (0 or 1).
+            kick (float): Kick command ([0, 10]).
             dribble (int): Dribble command (0 or 1).
             time_origin (float): Original packet creation time. Default=0.0.
 
@@ -58,7 +58,7 @@ class RobotCommand():
         self.vx: float = float(vx)
         self.vy: float = float(vy)
         self.w: float = float(w)
-        self.kick: int = int(kick)
+        self.kick: float = float(kick)
         self.dribble: int = int(dribble)
         self.time_origin: float = float(time_origin)
 
@@ -125,7 +125,7 @@ class RobotCommand():
             float(vx),
             float(vy),
             float(w),
-            int(kick),
+            float(kick),
             int(dribble),
             float(time_origin)]
 

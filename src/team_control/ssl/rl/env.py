@@ -15,13 +15,7 @@ from team_control.ssl.vision import Ball, Robot
 
 
 class GrSimEnv:
-    def __init__(
-        self,
-        wm: WorldModel,
-        sim_ip: str,
-        cmd_listen_port: int,
-        training: bool = True,
-    ):
+    def __init__(self, wm: WorldModel, training: bool = True):
         """
         Args:
             wm: WorldModel instance for robot and ball states
@@ -33,12 +27,8 @@ class GrSimEnv:
         super().__init__()
 
         self.wm: WorldModel = wm
-        self.sim_ip = sim_ip
-        self.cmd_listen_port = cmd_listen_port
         self.training = training
 
-        self.sender_yellow = GrSimSender(ip=self.sim_ip, port=self.cmd_listen_port, is_yellow=True)
-        self.sender_blue = GrSimSender(ip=self.sim_ip, port=self.cmd_listen_port, is_yellow=False)
         self.ball_sender = BallSender()
 
         self.field = Field("B")
@@ -86,38 +76,7 @@ class GrSimEnv:
             if self._wait_for_wm_update():
                 break
 
-    def step(self, actions) -> TensorDict:
-        for i in range(len(actions)):
-            id = i if i < 3 else i - 3
-            is_yellow = True if i < 3 else False
-            sender = self.sender_yellow if is_yellow else self.sender_blue
-
-            action = actions[i]
-            vx, vy, w, kick, dribble = action[0]
-
-            # TODO: clipping the actions in the range
-            # vx is in range [-5, 5]
-            # vy is in range [-5, 5]
-            # w is in range [-10, 10]
-            # kick is in range [0, 10]
-            # dribble is in range [0, 1]
-            vx = max(-5.0, min(5.0, vx))
-            vy = max(-5.0, min(5.0, vy))
-            w = max(-10.0, min(10.0, w))
-            kick = max(0.0, min(10.0, kick))
-            dribble = max(0.0, min(1.0, dribble))
-            dribble = 1 if dribble > 0.5 else 0
-
-            cmd = RobotCommand(
-                robot_id=id,
-                vx=vx,
-                vy=vy,
-                w=w,
-                kick=kick,
-                dribble=dribble,
-            )
-            sender.send_command(cmd)
-
+    def observe(self):
         # Wait for next world model update
         while True:
             if self._wait_for_wm_update():
@@ -127,9 +86,11 @@ class GrSimEnv:
         agent_observations = self._get_agent_observation()
 
         # Compute shared team rewards
-        reward_yellow, done = self._compute_team_rewards()
+        reward_yellow, done = self._compute_team_yellow_rewards()
+        reward_blue, _ = self._compute_team_blue_rewards()
+        reward_agents = self._calculate_agents_rewards()
 
-        return game_state, agent_observations, reward_yellow, done
+        return game_state, agent_observations, reward_agents, reward_yellow, reward_blue, done
 
     def _wait_for_wm_update(self) -> bool:
         """
@@ -190,12 +151,12 @@ class GrSimEnv:
             )
 
         robots_yellow_states = []
-        for i in range(4):
+        for i in range(2):
             robots_yellow_states.append(robot_state(self.robots_yellow[i]))
         robots_yellow_states = torch.cat([x for x in robots_yellow_states])
 
         robots_blue_states = []
-        for i in range(4):
+        for i in range(2):
             robots_blue_states.append(robot_state(self.robots_blue[i]))
         robots_blue_states = torch.cat([x for x in robots_blue_states])
 
@@ -217,21 +178,21 @@ class GrSimEnv:
         observations = []  # array of size 6  -  3 yellow and 3 blue
         bx, by = self.ball.position
 
-        for i in range(1, 4):
+        for i in range(1, 2):
             x, y, o = self.robots_yellow[i].position
             self_state = torch.tensor(
                 [x / self.field_x, y / self.field_y, math.sin(o), math.cos(o)], dtype=torch.float32
             )
             ball_rel = torch.tensor([(bx - x) / self.field_x, (by - y) / self.field_y], dtype=torch.float32)
             yellow_rel = []
-            for j in range(4):
+            for j in range(2):
                 mx, my, _ = self.robots_yellow[j].position
                 dx = (mx - x) / self.field_x
                 dy = (my - y) / self.field_y
                 yellow_rel.append(torch.tensor([dx, dy], dtype=torch.float32))
             yellow_rel = torch.cat([x for x in yellow_rel])
             blue_rel = []
-            for j in range(4):
+            for j in range(2):
                 mx, my, _ = self.robots_blue[j].position
                 dx = (mx - x) / self.field_x
                 dy = (my - y) / self.field_y
@@ -240,21 +201,21 @@ class GrSimEnv:
             observation = torch.cat([self_state, ball_rel, yellow_rel, blue_rel])
             observations.append(observation)
 
-        for i in range(1, 4):
+        for i in range(1, 2):
             x, y, o = self.robots_blue[i].position
             self_state = torch.tensor(
                 [x / self.field_x, y / self.field_y, math.sin(o), math.cos(o)], dtype=torch.float32
             )
             ball_rel = torch.tensor([(bx - x) / self.field_x, (by - y) / self.field_y], dtype=torch.float32)
             yellow_rel = []
-            for j in range(4):
+            for j in range(2):
                 mx, my, _ = self.robots_yellow[j].position
                 dx = (mx - x) / self.field_x
                 dy = (my - y) / self.field_y
                 yellow_rel.append(torch.tensor([dx, dy], dtype=torch.float32))
             yellow_rel = torch.cat([x for x in yellow_rel])
             blue_rel = []
-            for j in range(4):
+            for j in range(2):
                 mx, my, _ = self.robots_blue[j].position
                 dx = (mx - x) / self.field_x
                 dy = (my - y) / self.field_y
@@ -265,7 +226,7 @@ class GrSimEnv:
 
         return observations
 
-    def _compute_team_rewards(self):
+    def _compute_team_yellow_rewards(self):
         """
         Compute shared team rewards for yellow and blue teams.
 
@@ -278,6 +239,15 @@ class GrSimEnv:
         Returns:
             (reward_yellow: float, reward_blue: float)
         """
+        # the scheme of team_reward =
+        # + 1.0 * goal_scored
+        # − 1.0 * goal_conceded
+        # + 0.002 * ball_progress_toward_goal
+        # + 0.03  * possession
+        # + 0.05  * ball_in_opponent_box
+        # − 0.05  * ball_in_own_box
+        # − 0.33  * collision
+        # − 0.33  * goal_area_violation
         bx, by = self.ball.position
         # Goal is scored by yellow team
         if bx <= self.field.x_min and -self.field.goal_width / 2 <= by <= self.field.goal_width / 2:
@@ -290,21 +260,121 @@ class GrSimEnv:
         if bx > self.field.x_max or bx < self.field.x_min or by > self.field.y_max or by < self.field.y_min:
             return 0, True
 
+        # ball in opponent box +0.05 for yellow team
+        if self.field.x_min <= bx <= self.field.x_min + self.field.penalty_depth and -self.field.penalty_width / 2 <= by <= self.field.penalty_width / 2:
+            return 0.05, False
+        # ball in own box -0.05 for yellow team
+        if self.field.x_max-self.field.penalty_depth <= bx <= self.field.x_min and -self.field.penalty_width / 2 <= by <= self.field.penalty_width / 2:
+            return -0.05, False
+
         # if an agent of the yellow team is inside their own or other teams defense area -0.33 but its just a foul and game continues
-        for i in range(1, 4):
+        reward = 0
+        crossing_defense_area = False
+        for i in range(1, 2):
             rx, ry, _ = self.robots_yellow[i].position
             if -self.field.penalty_width / 2 <= ry <= self.field.penalty_width / 2 and (rx >= self.field.x_max-self.field.penalty_depth or rx <= self.field.x_min+self.field.penalty_depth):
-                return -0.33, False
+                reward -= 0.33
+                crossing_defense_area = True
+        if crossing_defense_area:
+            return reward, False
 
-        # if the yellow team has the ball in possession they are rewarded 0.05 and game continues
-        for i in range(4):
+        ROBOT_RADIUS = 88.5  # mm
+        COLLISION_DISTANCE = ROBOT_RADIUS * 2
+        # if any yellow robot collides with opponent robot -0.33 and game continues
+        for i in range(2):
             rx, ry, _ = self.robots_yellow[i].position
-            if math.hypot(rx-bx, ry-by) <= 110:
-                return 0.05, False
-        # if the blue team has the ball in possession they are punished -0.05 and game continues
-        for i in range(4):
-            rx, ry, _ = self.robots_blue[i].position
-            if math.hypot(rx-bx, ry-by) <= 110:
-                return -0.05, False
+            for j in range(2):
+                ox, oy, _ = self.robots_blue[j].position
+                if math.hypot(rx-ox, ry-oy) <= COLLISION_DISTANCE:
+                    return -0.33, False
 
         return -0.01, False
+
+    def _compute_team_blue_rewards(self):
+        """
+        Compute shared team rewards for blue team.
+
+        This function complements the yellow team reward computation.
+        Reward is computed at the team level, encouraging cooperation.
+
+        For simplicity, this example returns zero rewards.
+        Replace this method with your custom team-level reward logic.
+
+        Returns:
+            reward_blue: float
+        """
+        # the scheme of team_reward =
+        # + 1.0 * goal_scored
+        # − 1.0 * goal_conceded
+        # + 0.002 * ball_progress_toward_goal
+        # + 0.03  * possession
+        # + 0.05  * ball_in_opponent_box
+        # − 0.05  * ball_in_own_box
+        # − 0.33  * collision
+        # − 0.33  * goal_area_violation
+        bx, by = self.ball.position
+        # Goal is scored by yellow team
+        if bx <= self.field.x_min and -self.field.goal_width / 2 <= by <= self.field.goal_width / 2:
+            return -1, True
+        # Goal is scored by blue team
+        if bx >= self.field.x_max and -self.field.goal_width / 2 <= by <= self.field.goal_width / 2:
+            return 1, True
+
+        # if ball is outside field the game is done, nobody recieves nothing, game is done
+        if bx > self.field.x_max or bx < self.field.x_min or by > self.field.y_max or by < self.field.y_min:
+            return 0, True
+
+        # ball in opponent box +0.05 for yellow team
+        if self.field.x_min <= bx <= self.field.x_min + self.field.penalty_depth and -self.field.penalty_width / 2 <= by <= self.field.penalty_width / 2:
+            return -0.05, False
+        # ball in own box -0.05 for yellow team
+        if self.field.x_max-self.field.penalty_depth <= bx <= self.field.x_min and -self.field.penalty_width / 2 <= by <= self.field.penalty_width / 2:
+            return +0.05, False
+
+        # if an agent of the yellow team is inside their own or other teams defense area -0.33 but its just a foul and game continues
+        reward = 0
+        crossing_defense_area = False
+        for i in range(1, 2):
+            rx, ry, _ = self.robots_blue[i].position
+            if -self.field.penalty_width / 2 <= ry <= self.field.penalty_width / 2 and (rx >= self.field.x_max-self.field.penalty_depth or rx <= self.field.x_min+self.field.penalty_depth):
+                reward -= 0.33
+                crossing_defense_area = True
+        if crossing_defense_area:
+            return reward, False
+
+        ROBOT_RADIUS = 88.5  # mm
+        COLLISION_DISTANCE = ROBOT_RADIUS * 2
+        # if any yellow robot collides with opponent robot -0.33 and game continues
+        for i in range(2):
+            rx, ry, _ = self.robots_yellow[i].position
+            for j in range(2):
+                ox, oy, _ = self.robots_blue[j].position
+                if math.hypot(rx-ox, ry-oy) <= COLLISION_DISTANCE:
+                    return -0.33, False
+
+        # our team will be rewarded/punished based on the distance of its closest robot to the ball
+        return -0.01, False
+
+    def _calculate_agents_rewards(self):
+        """
+        Compute per-agent rewards for both teams.
+
+        This function is a placeholder for per-agent reward logic.
+        Replace this method with your custom per-agent reward logic.
+
+        Returns:
+            rewards_yellow: List[float] - rewards for yellow team agents
+            rewards_blue: List[float] - rewards for blue team agents
+        """
+        reward_agents = [0.0 for _ in range(2)]
+        for i in range(1):
+            x, y, o = self.robots_yellow[i+1].position
+            x_ball, y_ball = self.ball.position
+            dist = math.hypot(x - x_ball, y - y_ball)
+            reward_agents[i] = -dist / math.hypot(self.field.x_max, self.field.y_max) * 0.1
+        for i in range(1):
+            x, y, o = self.robots_blue[i+1].position
+            x_ball, y_ball = self.ball.position
+            dist = math.hypot(x - x_ball, y - y_ball)
+            reward_agents[i+1] = -dist / math.hypot(self.field.x_max, self.field.y_max) * 0.1
+        return reward_agents

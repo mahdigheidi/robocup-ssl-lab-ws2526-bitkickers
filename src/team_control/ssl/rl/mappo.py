@@ -1,121 +1,247 @@
 from multiprocessing import Process, Queue, Event, set_start_method
 import time
+import random
+import math
 import traceback
+from collections import deque
+from typing import List
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.distributions import Normal
+from torch.distributions import Normal, Bernoulli, Categorical
 
+from team_control.network.robot_command import RobotCommand
+from team_control.network.sender import GrSimSender
 from team_control.ssl.vision.process import vision_worker
 from team_control.world.model_manager import WorldModelManager
 from team_control.world.model import WorldModel
 from team_control.world.model_runner import wm_runner
-from team_control.ssl.rl.encoder import Encoder
+from team_control.ssl.rl.archived.encoder import Encoder
 from team_control.ssl.rl.env import GrSimEnv
 from team_control.ssl.rl.referee import Referee, referee_worker
+
+from team_control.network.send_ball_grsim import BallSender
 from team_control.ssl.rl.field import Field
 from team_control.ssl.manual_controller.goalie_process import goalie_process
+from team_control.ssl.rl.behavior_cloning import cloner_process
+from team_control.ssl.rl.striker_process import striker_process
+from team_control.network.ball_spawner import BallSpawner
 
 
-def _sample_action(mu, std):
-    dist = Normal(mu, std)
-    action = dist.sample()
-    log_prob = dist.log_prob(action).sum(dim=-1, keepdim=True)
-    entropy = dist.entropy().sum(dim=-1, keepdim=True)
+def spawner_process(wm: WorldModel):
+    time.sleep(1)
+    ball_sender = BallSender()
+    spawner = BallSpawner('B')
+    prev_ball = wm.get_latest_frame().ball.position
+    time_check = time.time()
+    version = 0
+    while True:
+        ball = wm.get_latest_frame().ball.position
+        if not spawner.is_ball_in_field(ball):
+            r = random.randint(100, 500)
+            theta = random.uniform(-math.pi, math.pi)
+            x = r * math.cos(theta)
+            y = r * math.sin(theta)
+            ball_sender.send_ball_to_grsim(x, y, 0, 0)
+            ball = (x, y)
+        if time.time() - time_check > 5:
+            time_check = time.time()
+            if spawner.is_ball_idle(ball, prev_ball):
+                r = random.randint(100, 500)
+                theta = random.uniform(-math.pi, math.pi)
+                x = r * math.cos(theta)
+                y = r * math.sin(theta)
+                ball_sender.send_ball_to_grsim(x, y, 0, 0)
+                ball = (x, y)
+            prev_ball = ball
+
+# our model will be trained to play on the right side (yellow) perspective
+# if we want to play on the left side (blue) perspective
+# we use mirroring logic and flip the x coordinates of all robots and the ball
+# ============================================================
+# Mirroring logic
+# ============================================================
+
+
+def get_mirrored_state(state):
+    """
+    Mirrors the global game state for the opposing team.
+    Input state shape: [34]
+    Structure: Ball(x, y) + 8 Agents(x, y, sin, cos)
+    """
+    mirrored_state = state.clone()
+
+    # 1. Flip Ball X, Y
+    mirrored_state[0:2] *= -1
+
+    # 2. Flip Agent Positions and Headings
+    # Each agent has 4 values: x, y, sin, cos
+    # Indices 2 to 33 are the 8 agents
+    # yellow goalie: 2-5, yellow p1: 6-9, yellow p2: 10-13, yellow p3: 14-17
+    # blue goalie: 18-21, blue p1: 22-25, blue p2: 26-29, blue p3: 30-33
+    # we must swap yellow and blue agents as well
+    # yellow goalie <-> blue goalie
+    mirrored_state[2:6], mirrored_state[18:22] = state[18:22] * \
+        torch.tensor([-1, -1, -1, -1]), state[2:6] * torch.tensor([-1, -1, -1, -1])
+    # yellow p1 <-> blue p1
+    mirrored_state[6:10], mirrored_state[22:26] = state[22:26] * \
+        torch.tensor([-1, -1, -1, -1]), state[6:10] * torch.tensor([-1, -1, -1, -1])
+    # yellow p2 <-> blue p2
+    mirrored_state[10:14], mirrored_state[26:30] = state[26:30] * \
+        torch.tensor([-1, -1, -1, -1]), state[10:14] * torch.tensor([-1, -1, -1, -1])
+    # yellow p3 <-> blue p3
+    mirrored_state[14:18], mirrored_state[30:34] = state[30:34] * \
+        torch.tensor([-1, -1, -1, -1]), state[14:18] * torch.tensor([-1, -1, -1, -1])
+    # print("Mirrored State shape: ", mirrored_state.shape)
+    return mirrored_state
+
+
+def get_mirrored_obs(observation):
+    """
+    Mirrors individual agent observations.
+    observations shape: [6, 22]
+    (Each agent's relative distances/vectors)
+    """
+    # observation structure:
+    # Agent absolute (x, y, sin, cos) = 4
+    # Relative to Ball (x, y) = 2
+    # Relative to Yellow(Goalie, P1, P2, P3) (x, y) = 8
+    # Relative to Blue(Goalie, P1, P2, P3) (x, y) = 8
+    obs_mirrored = observation.clone()
+    # mirror the ball
+    obs_mirrored[4:6] *= -1
+    # first swap the relative positions of yellow and blue robots
+    obs_mirrored[6:14], obs_mirrored[14:22] = observation[14:22] * \
+        torch.tensor([-1, -1, -1, -1, -1, -1, -1, -1]), observation[6:14] * \
+        torch.tensor([-1, -1, -1, -1, -1, -1, -1, -1])
+
+    return obs_mirrored
+
+
+def mirror_action(action):
+    """
+    Flips the actions sampled from the mirrored model back to
+    the environment's global coordinate system.
+    action: [vx, vy, w, kick, dribble]
+    """
+    mirrored_action = list(action)
+    mirrored_action[0] *= -1  # Flip vx
+    mirrored_action[1] *= -1  # Flip vy
+    # w, kick, and dribble usually remain the same
+    return mirrored_action
+
+
+def _sample_action(mu, std, dribble_logits, kick_logits):
+    cont_dist = Normal(mu, std)
+    z = cont_dist.rsample()  # for reparameterization trick (mean + std * N(0,1))
+    cont_action = torch.tanh(z)
+    cont_logp = cont_dist.log_prob(z) - torch.log(1 - cont_action.pow(2) + 1e-6)
+    cont_logp = cont_logp.sum(dim=-1, keepdim=True)
+    cont_entropy = cont_dist.entropy().sum(dim=-1, keepdim=True)
+
+    kick_dist = Categorical(logits=kick_logits)
+    kick_action = kick_dist.sample()
+    kick_logp = kick_dist.log_prob(kick_action)
+    kick_entropy = kick_dist.entropy()
+
+    dribble_dist = Bernoulli(logits=dribble_logits)
+    dribble_action = dribble_dist.sample()
+    dribble_logp = dribble_dist.log_prob(dribble_action)
+    dribble_entropy = dribble_dist.entropy().squeeze(-1)
+
+    action = torch.cat([cont_action, kick_action.unsqueeze(0), dribble_action], dim=-1)
+    log_prob = cont_logp + kick_logp + dribble_logp
+    entropy = cont_entropy + kick_entropy + dribble_entropy
+    # print(entropy)
+
     return action, log_prob, entropy
 
 
 class Actor(nn.Module):
     def __init__(self):
         super().__init__()
-        # Relative distance of the ego robot to each of the Ball, YGoalie, YP1, YP2, YP3, BGoalie, BP1, BP2, BP3
-        self.memory = nn.LSTM(22, 256, num_layers=1)
+        # Absolute Ego data and Relative distance of the ego robot to each entities
+        # Absolute = 4
+        # Relative to the Ball, Teammate(Goalie, P1, P2, P3), Opponent(Goalie, P1, P2, P3) (2*9 = 18) = 18 ==> 4 + 18 = 22
+        # Stacked over 10 time steps = 22 * 10
         self.backbone = nn.Sequential(
-            nn.Linear(256, 256),
+            nn.Linear(22, 256),
             nn.ReLU(),
             nn.Linear(256, 256),
             nn.ReLU(),
             nn.Linear(256, 128),
         )
-        self.mu_head = nn.Linear(128, 5)
-        self.log_std = nn.Parameter(torch.zeros(5))
+        self.mu_head = nn.Linear(128, 3)
+        self.log_std = nn.Parameter(torch.zeros(3))
 
-    def init_hidden(self):
-        # shape = (sequence_length, ...)
-        h = torch.zeros(1, 1, 256)
-        c = torch.zeros(1, 1, 256)
-        return (h, c)
+        self.kick_head = nn.Linear(128, 11)  # kick power from 0 to 10
+        self.dribble_head = nn.Linear(128, 1)  # dribble on/off
 
-    def forward(self, observations, hidden_obs_agents):
-        actions = []
-        log_probs = []
-        entropies = []
-        next_hidden_obs_agents = []
+    def forward(self, observation_stack: List[torch.Tensor]):
+        observations = torch.cat(list(observation_stack), dim=-1)
+        x = self.backbone(observations)
+        mu = self.mu_head(x)
+        std = torch.exp(self.log_std)
+        kick_logits = self.kick_head(x)
+        dribble_logits = self.dribble_head(x)
+        action, log_prob, entropy = _sample_action(mu, std, dribble_logits, kick_logits)
 
-        for i in range(6):
-            observation_embedding, next_hidden_obs = self.memory(observations[i].unsqueeze(0).unsqueeze(0), hidden_obs_agents[i])
-            x = self.backbone(observation_embedding)
-            mu = self.mu_head(x)
-            std = torch.exp(self.log_std)
-            action, log_prob, entropy = _sample_action(mu, std)
-            actions.append(action)
-            log_probs.append(log_prob)
-            entropies.append(entropy)
-            next_hidden_obs_agents.append(next_hidden_obs)
-        actions = torch.cat(actions)
-        log_probs = torch.cat(log_probs)
-        entropies = torch.cat(entropies)
-
-        return actions, log_probs, entropies, next_hidden_obs_agents
+        return action, log_prob, entropy
 
 
 class Critic(nn.Module):
     def __init__(self):
         super().__init__()
         # input is game state --> Ball (x, y) + 8 Agents (x, y, sin, cos) = 2 + 8 * 4 = 34
-        self.memory = nn.LSTM(34, 256, num_layers=1, batch_first=True)
+        # stacked over 10 time steps = 34 * 10
         self.q = nn.Sequential(
-            nn.Linear(256, 256),
+            nn.Linear(34 * 10, 512),
             nn.ReLU(),
-            nn.Linear(256, 256),
+            nn.Linear(512, 256),
             nn.ReLU(),
             nn.Linear(256, 1),
         )
 
-    def init_hidden(self):
-        # shape = (batch_size=1, sequence_length, hidden_size)
-        h = torch.zeros(1, 1, 256)
-        c = torch.zeros(1, 1, 256)
-        return (h, c)
-
-    def forward(self, game_state, hidden_game_state):
-        game_embedding, next_hidden_game = self.memory(game_state.unsqueeze(0).unsqueeze(0), hidden_game_state)
-        value = self.q(game_embedding)
-        return value, game_embedding, next_hidden_game
+    def forward(self, game_state_stack: List[torch.Tensor]):
+        # concatenate all these tensor with size [34,] over the stack frames to get [340,]
+        # print(len(list(game_state_stack)))
+        # for i in range(len(game_state_stack)):
+        #     print(game_state_stack[i])
+        game_memory = torch.cat(list(game_state_stack))
+        value = self.q(game_memory)
+        return value
 
 
 # ============================================================
 # MAPPO Rollout Buffer
 # ============================================================
-class MAPPORolloutBuffer:
+class TeamRolloutBuffer:
     def __init__(self):
-        self.states = []
-        self.observations = []
-        self.hiddens_game = []
-        self.hiddens_agents = []
+        self.state_stacks = []
+        self.rewards = []
+        self.dones = []
+        self.values = []
+
+    def add(self, game_state_buffer, rewards, done, value):
+        self.state_stacks.append(list(game_state_buffer))
+        self.rewards.append(rewards)
+        self.dones.append(done)
+        self.values.append(value.detach())
+
+
+class AgentRolloutBuffer:
+    def __init__(self):
+        self.observation_stacks = []
         self.rewards = []
         self.dones = []
         self.values = []
         self.logps = []
         self.entropies = []
 
-    def add(self, game_state, observations, hidden_game, hidden_agents, reward_yellow, done, value, log_probs, entropies):
-        self.states.append(game_state.detach())
-        self.observations.append(observations)
-        self.hiddens_game.append((hidden_game[0].detach(), hidden_game[1].detach()))
-        self.hiddens_agents.append([(h.detach(), c.detach()) for (h, c) in hidden_agents])
-        self.rewards.append(reward_yellow)
+    def add(self, observations_buffer, reward, done, value, log_probs, entropies):
+        self.observation_stacks.append(list(observations_buffer))
+        self.rewards.append(reward)
         self.dones.append(done)
         self.values.append(value.detach())
         self.logps.append(log_probs.detach())
@@ -139,20 +265,12 @@ def compute_gae(rewards, values, dones, gamma=0.99, lam=0.95):
     return advantages, returns
 
 
-def train_model(actor: Actor, critic: Critic, actor_optim: torch.optim, critic_optim: torch.optim, buffer: MAPPORolloutBuffer):
-    # hyperparams
+def train_critic(critic: Critic, critic_optim: torch.optim, buffer: TeamRolloutBuffer):
     vf_coef = 0.5
-    clip = 0.1
-    ent_coef = 0.01
-    # max_grad_norm = 0.5
-
-    # the advantages and returns are calculated based on yellow (right side playing team) perspective
-    advantages, returns = compute_gae(buffer.rewards, buffer.values, buffer.dones)
-
-    # Critic loss
+    _, returns = compute_gae(buffer.rewards, buffer.values, buffer.dones)
     current_values = []
-    for state, hidden_game in zip(buffer.states, buffer.hiddens_game):
-        new_value, _, _ = critic(state, hidden_game)
+    for state_stack in buffer.state_stacks:
+        new_value = critic(state_stack)
         current_values.append(new_value)
     critic_loss = 0
     for value, ret in zip(current_values, returns):
@@ -162,75 +280,192 @@ def train_model(actor: Actor, critic: Critic, actor_optim: torch.optim, critic_o
     critic_loss.backward()
     critic_optim.step()
 
-    # Actor loss (sum over agents)
+
+def train_actor(actor: Actor, actor_optim: torch.optim, buffer: AgentRolloutBuffer):
+    clip = 0.1
+    ent_coef = 0.01
+    advantages, _ = compute_gae(buffer.rewards, buffer.values, buffer.dones)
+
+    # Actor loss
     actor_loss = 0
+
     for i in range(len(buffer.dones)):
-        observations = buffer.observations[i]
-        hiddens_agents = buffer.hiddens_agents[i]
-        old_logps = buffer.logps[i]
-        advantage = advantages[i].detach()
-        # print("Advantage is: ", advantage)
-        agent_advantages = torch.cat([advantage, advantage, advantage, -advantage, -advantage, -advantage])
+        old_logps_y = buffer.logps[i]
 
-        _, new_logp, new_entropies, _ = actor(observations, hiddens_agents)
+        _, new_logp_y, new_entropies_y = actor(buffer.observation_stacks[i])
 
-        ratio = torch.exp(new_logp - old_logps)
-        # print("Ratio is: ", ratio)
-        surr1 = ratio * agent_advantages
-        # print("Surr1 is: ", surr1)
-        surr2 = torch.clamp(ratio, 1 - clip, 1 + clip) * agent_advantages
-        policy_loss = -torch.min(surr1, surr2).mean()
-        entropy_loss = new_entropies.mean()
-        actor_loss += policy_loss - ent_coef * entropy_loss
+        ratio = torch.exp(new_logp_y - old_logps_y)
+        surr1 = ratio * advantages[i]
+        surr2 = torch.clamp(ratio, 1 - clip, 1 + clip) * advantages[i]
+        policy_loss = -torch.min(surr1, surr2)
+        actor_loss += policy_loss - ent_coef * new_entropies_y
 
     actor_optim.zero_grad()
     actor_loss.backward()
     actor_optim.step()
 
 
-def mappo_process(wm):
-    env = GrSimEnv(wm, '127.0.0.1', 20011, True)
+def mappo_process(wm, action_p1_y: Queue, action_p2_y: Queue, action_p3_y: Queue, action_p1_b: Queue, action_p2_b: Queue, action_p3_b: Queue):
+    env = GrSimEnv(wm)
 
+    actor_pool = deque(maxlen=5)
+    critic_pool = deque(maxlen=5)
     actor = Actor()
+    opp_actor = Actor()
+    # set the yellow and blue actors to the same initial weights
+    opp_actor.load_state_dict(actor.state_dict())
     critic = Critic()
     actor_optim = torch.optim.Adam(actor.parameters(), lr=3e-4)
-    critic_optim = torch.optim.Adam(critic.parameters(), lr=5e-4)
-    rollout_buffer = MAPPORolloutBuffer()
+    critic_optim = torch.optim.Adam(critic.parameters(), lr=3e-4)
 
-    num_episodes = 20
+    rollout_yellow = TeamRolloutBuffer()
+    rollout_blue = TeamRolloutBuffer()
+    rollout_yp1 = AgentRolloutBuffer()
+    rollout_yp2 = AgentRolloutBuffer()
+    rollout_yp3 = AgentRolloutBuffer()
+    rollout_bp1 = AgentRolloutBuffer()
+    rollout_bp2 = AgentRolloutBuffer()
+    rollout_bp3 = AgentRolloutBuffer()
+
+    yellow_game_stack = deque(maxlen=10)
+    yellow_game_stack.extend([torch.zeros(34) for _ in range(10)])
+    blue_game_stack = deque(maxlen=10)
+    blue_game_stack.extend([torch.zeros(34) for _ in range(10)])
+
+    obs_y_p1_stack = deque(maxlen=10)
+    obs_y_p1_stack.extend([torch.zeros(22) for _ in range(10)])
+    obs_y_p2_stack = deque(maxlen=10)
+    obs_y_p2_stack.extend([torch.zeros(22) for _ in range(10)])
+    obs_y_p3_stack = deque(maxlen=10)
+    obs_y_p3_stack.extend([torch.zeros(22) for _ in range(10)])
+    obs_b_p1_stack = deque(maxlen=10)
+    obs_b_p1_stack.extend([torch.zeros(22) for _ in range(10)])
+    obs_b_p2_stack = deque(maxlen=10)
+    obs_b_p2_stack.extend([torch.zeros(22) for _ in range(10)])
+    obs_b_p3_stack = deque(maxlen=10)
+    obs_b_p3_stack.extend([torch.zeros(22) for _ in range(10)])
+
+    num_episodes = 200
     training_epochs = 5
     episode_max_time = 0.1  # in minutes
     episode_max_length = int(episode_max_time * 60 * 12)
-    episode_rewards = []
-    episode_reward = 0
+    episode_rewards_yellow = []
+    episode_rewards_blue = []
     for episode in range(num_episodes):
-        actions = torch.zeros(6, 1, 5)
-        hidden_obs = [actor.init_hidden() for _ in range(6)]
-        hidden_game = critic.init_hidden()
+        episode_reward_yellow = 0
+        episode_reward_blue = 0
 
         for _ in range(episode_max_length):
-            game_state, observations, reward_yellow, done = env.step(actions)
-            episode_reward += reward_yellow
-            value, game_embedding, hidden_game = critic(game_state, hidden_game)
+            game_state, observations, reward_agents, reward_yellow, reward_blue, done = env.observe()
+            mirror_game_state = get_mirrored_state(game_state)
 
-            actions, log_probs, entropies, next_hidden_obs = actor(observations, hidden_obs)
+            yellow_game_stack.append(game_state.detach())
+            blue_game_stack.append(mirror_game_state.detach())
 
-            rollout_buffer.add(
-                game_state, observations, hidden_game, hidden_obs,
-                reward_yellow, done, value, log_probs, entropies)
-            hidden_obs = next_hidden_obs
+            obs_y_p1_stack.append(observations[0].detach())
+            obs_y_p2_stack.append(observations[1].detach())
+            obs_y_p3_stack.append(observations[2].detach())
+            obs_b_p1_stack.append(get_mirrored_obs(observations[3].detach()))
+            obs_b_p2_stack.append(get_mirrored_obs(observations[4].detach()))
+            obs_b_p3_stack.append(get_mirrored_obs(observations[5].detach()))
+
+            episode_reward_yellow += reward_yellow
+            episode_reward_blue += reward_blue
+
+            value_yellow = critic(yellow_game_stack)
+            value_blue = critic(blue_game_stack)
+            rollout_yellow.add(yellow_game_stack, reward_yellow, done, value_yellow)
+            rollout_blue.add(blue_game_stack, reward_blue, done, value_blue)
+            action_p1y, log_probs_p1y, entropies_p1y = actor(obs_y_p1_stack)
+            action_p2y, log_probs_p2y, entropies_p2y = actor(obs_y_p2_stack)
+            action_p3y, log_probs_p3y, entropies_p3y = actor(obs_y_p3_stack)
+            action_p1b, log_probs_p1b, entropies_p1b = opp_actor(obs_b_p1_stack)
+            action_p2b, log_probs_p2b, entropies_p2b = opp_actor(obs_b_p2_stack)
+            action_p3b, log_probs_p3b, entropies_p3b = opp_actor(obs_b_p3_stack)
+
+            action_p1_y.put(action_p1y.squeeze(0).detach().numpy())
+            action_p2_y.put(action_p2y.squeeze(0).detach().numpy())
+            action_p3_y.put(action_p3y.squeeze(0).detach().numpy())
+            action_p1_b.put(mirror_action(action_p1b.squeeze(0).detach().numpy()))
+            action_p2_b.put(mirror_action(action_p2b.squeeze(0).detach().numpy()))
+            action_p3_b.put(mirror_action(action_p3b.squeeze(0).detach().numpy()))
+
+            rollout_yp1.add(obs_y_p1_stack, reward_agents[0]*0.4+reward_yellow *
+                            0.6, done, value_yellow, log_probs_p1y, entropies_p1y)
+            rollout_yp2.add(obs_y_p2_stack, reward_agents[1]*0.4+reward_yellow *
+                            0.6, done, value_yellow, log_probs_p2y, entropies_p2y)
+            rollout_yp3.add(obs_y_p3_stack, reward_agents[2]*0.4+reward_yellow *
+                            0.6, done, value_yellow, log_probs_p3y, entropies_p3y)
+            rollout_bp1.add(obs_b_p1_stack, reward_agents[3]*0.4+reward_blue *
+                            0.6, done, value_blue, log_probs_p1b, entropies_p1b)
+            rollout_bp2.add(obs_b_p2_stack, reward_agents[4]*0.4+reward_blue *
+                            0.6, done, value_blue, log_probs_p2b, entropies_p2b)
+            rollout_bp3.add(obs_b_p3_stack, reward_agents[5]*0.4+reward_blue *
+                            0.6, done, value_blue, log_probs_p3b, entropies_p3b)
 
             if done:
                 env.reset()
                 break
 
-        print(f"Episode {episode + 1} reward:   ", episode_reward)
-        episode_rewards.append(episode_reward)
+        print(f"Episode {episode + 1} reward yellow:   ", episode_reward_yellow)
+        print(f"Episode {episode + 1} reward blue:     ", episode_reward_blue)
+        episode_rewards_yellow.append(episode_reward_yellow)
+        episode_rewards_blue.append(episode_reward_blue)
         # every X episodes we update our policy to improve it online using ppo
-        if (episode+1) % 5 == 0:
+        if (episode+1) % 10 == 0:
+            print("Training on collected rollouts...")
             for _ in range(training_epochs):
-                train_model(actor, critic, actor_optim, critic_optim, rollout_buffer)
-            rollout_buffer = MAPPORolloutBuffer()
+                train_critic(critic, critic_optim, rollout_yellow)
+                train_critic(critic, critic_optim, rollout_blue)
+                train_actor(actor, actor_optim, rollout_yp1)
+                train_actor(actor, actor_optim, rollout_yp2)
+                train_actor(actor, actor_optim, rollout_yp3)
+                train_actor(actor, actor_optim, rollout_bp1)
+                train_actor(actor, actor_optim, rollout_bp2)
+                train_actor(actor, actor_optim, rollout_bp3)
+
+            rollout_yp1 = AgentRolloutBuffer()
+            rollout_yp2 = AgentRolloutBuffer()
+            rollout_yp3 = AgentRolloutBuffer()
+            rollout_bp1 = AgentRolloutBuffer()
+            rollout_bp2 = AgentRolloutBuffer()
+            rollout_bp3 = AgentRolloutBuffer()
+            actor_pool.append(actor.state_dict())
+            critic_pool.append(critic.state_dict())
+            # choose one actor from the pool to be the opponent model
+            k = min(5, len(actor_pool))
+            idx = torch.randint(0, k, (1,)).item()
+            opp_actor.load_state_dict(actor_pool[idx])
+            if (episode+1) % 50 == 0:
+                torch.save(actor.state_dict(), f'mappo_actor_episode_{episode+1}.pth')
+                torch.save(critic.state_dict(), f'mappo_critic_episode_{episode+1}.pth')
+
+
+def agent_process(action_queue: Queue, is_yellow: bool, robot_id: int):
+    grsim_sender = GrSimSender(ip='127.0.0.1', port=20011, is_yellow=is_yellow)
+    while True:
+        try:
+            action = action_queue.get()
+            vx, vy, w, kick, dribble = action
+
+            vx *= 5
+            vy *= 5
+            w *= 10
+
+            cmd = RobotCommand(
+                robot_id=robot_id,
+                vx=vx,
+                vy=vy,
+                w=0,
+                kick=0,
+                dribble=0,
+            )
+            # print("Velocity scale: ", (vx**2 + vy**2)**0.5)
+            grsim_sender.send_command(cmd)
+
+        except Exception as e:
+            print(f"Error in agent_process for robot {robot_id} {'Yellow' if is_yellow else 'Blue'}: {e}")
+            traceback.print_exc()
 
 
 if __name__ == '__main__':
@@ -246,16 +481,62 @@ if __name__ == '__main__':
 
     yellow_goalie = Process(target=goalie_process, args=(wm, 'B', '127.0.0.1', 20011, 0, True))
     blue_goalie = Process(target=goalie_process, args=(wm, 'B', '127.0.0.1', 20011, 0, False))
-    mappo = Process(target=mappo_process, args=(wm,))
+
+    action_p1_y = Queue()
+    action_p2_y = Queue()
+    action_p3_y = Queue()
+    action_p1_b = Queue()
+    action_p2_b = Queue()
+    action_p3_b = Queue()
+    agent_y1 = Process(target=agent_process, args=(action_p1_y, True, 1))
+    agent_y2 = Process(target=agent_process, args=(action_p2_y, True, 2))
+    agent_y3 = Process(target=agent_process, args=(action_p3_y, True, 3))
+    agent_b1 = Process(target=agent_process, args=(action_p1_b, False, 1))
+    agent_b2 = Process(target=agent_process, args=(action_p2_b, False, 2))
+    agent_b3 = Process(target=agent_process, args=(action_p3_b, False, 3))
+    mappo = Process(target=mappo_process, args=(wm, action_p1_y, action_p2_y,
+                                                action_p3_y, action_p1_b, action_p2_b, action_p3_b))
 
     vision_wkr.start()
+    # time.sleep(2)  # give some time for the vision worker to start and populate the world model
     wmr.start()
-    yellow_goalie.start()
-    blue_goalie.start()
-    mappo.start()
 
-    mappo.join()
-    yellow_goalie.join()
-    blue_goalie.join()
+    goalie = Process(target=goalie_process, args=(wm, '192.168.178.2', 20011, 0, True))
+    defender = Process(target=striker_process, args=(wm, '192.168.178.2', 20011, 1, True))
+    midfielder = Process(target=striker_process, args=(wm, '192.168.178.2', 20011, 2, True))
+    striker = Process(target=striker_process, args=(wm, '192.168.178.2', 20011, 3, True))
+    goalie_blue = Process(target=goalie_process, args=(wm, '192.168.178.2', 20011, 0, False))
+    defender_blue = Process(target=striker_process, args=(wm, '192.168.178.2', 20011, 1, False))
+    midfielder_blue = Process(target=striker_process, args=(wm, '192.168.178.2', 20011, 2, False))
+    striker_blue = Process(target=striker_process, args=(wm, '192.168.178.2', 20011, 3, False))
+    spawner = Process(target=spawner_process, args=(wm,))
+    spawner.start()
+    goalie.start()
+    defender.start()
+    midfielder.start()
+    striker.start()
+    goalie_blue.start()
+    defender_blue.start()
+    midfielder_blue.start()
+    striker_blue.start()
+    goalie.join()
+    striker.join()
+    midfielder.join()
+    defender.join()
+    spawner.join()
+
+    # mappo.start()
+    # yellow_goalie.start()
+    # agent_y1.start()
+    # agent_y2.start()
+    # agent_y3.start()
+    # blue_goalie.start()
+    # agent_b1.start()
+    # agent_b2.start()
+    # agent_b3.start()
+
+    # mappo.join()
+    # yellow_goalie.join()
+    # blue_goalie.join()
     vision_wkr.join()
     wmr.join()
