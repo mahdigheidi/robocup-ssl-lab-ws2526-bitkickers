@@ -16,13 +16,13 @@ Features:
 Author: Emma
 """
 
-from team_control.vision.frame_list import FrameList
-from team_control.vision.field import GeometryData,FieldSize
-from team_control.vision.frame import Frame
-from team_control.game_controller.fsm import PacketType,GameState
-
-from multiprocessing import Queue,Manager
 import logging
+from multiprocessing import Manager
+
+from team_control.game_controller.fsm import GameState, PacketType
+from team_control.vision.field import FieldSize, GeometryData
+from team_control.vision.frame import Frame
+from team_control.vision.frame_list import FrameList
 
 log = logging.getLogger()
 log.setLevel(logging.DEBUG)

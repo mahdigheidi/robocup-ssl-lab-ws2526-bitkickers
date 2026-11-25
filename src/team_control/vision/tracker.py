@@ -1,5 +1,6 @@
-import numpy as np
 from enum import Enum
+
+import numpy as np
 
 
 class Capability (Enum):
@@ -28,13 +29,13 @@ class Vector3:
     def array (self)-> np.ndarray[float]:
         return np.array(self.x,self.y,self.z,dtype=float)
         
-class TrackedBall():
+class TrackedBall:
     def __init__(self, pos:Vector3, vel:Vector3=None,visibility:float=None):
         self.pos:Vector3= pos
         self.vel:Vector3= vel
         self.visiblity:float= visibility
         
-class KickedBall():
+class KickedBall:
     def __init__(self ,pos:Vector2, vel:Vector3, start_timestamp:float,stop_timestamp:float=None,
                  stop_pos:Vector2=None,robot_id:int=None):
         self.pos:Vector2 = pos
@@ -49,7 +50,7 @@ class KickedBall():
         ## The robot that kicked the ball
         self.robot_id : int = robot_id 
 
-class TrackedRobot():
+class TrackedRobot:
     def __init__(self,robot_id:int,pos:Vector2,orientation:float,vel:Vector2,vel_angular:float,visibility:float ):
         self.robot_id:int = robot_id
         ## The position [m] in the ssl-vision coordinate system
@@ -66,7 +67,7 @@ class TrackedRobot():
         ## The exact implementation depends on the source software
         self.visibility:float = visibility
 
-class TrackedFrame():
+class TrackedFrame:
     def __init__(self,frame_number:int,timestamp:float,balls:list[TrackedBall],
                  robots:list[TrackedRobot],kicked_ball:KickedBall=None,capability:list[Capability]=None
                  ):
@@ -90,7 +91,7 @@ class TrackedFrame():
         self.capability:list[Capability]=capability if capability is not None else []
 
 
-class TrackerWrapperPacket() :
+class TrackerWrapperPacket :
     def __init__(self,uuid:str,source_name:str=None,tracked_frame:TrackedFrame=None):
         
         ## A random UUID of the source that is kept constant at the source while running

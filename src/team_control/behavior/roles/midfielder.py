@@ -1,22 +1,22 @@
 import logging
-from typing import Optional
+import time
 from enum import Enum, auto
-from team_control.behavior.phases.ball_handling import ReceivingStateMachine
-from team_control.behavior.role import Role
-from team_control.behavior.context import RobotContext, teammate_can_chase_ball
-from team_control.motion.obstacles.helpers import RoleArea, check_possession
-from team_control.behavior.phases.basic import ShadowBallStateMachine
-from team_control.utils.state_machine import StateMachine
+from typing import Optional
+
+import numpy as np
+
+from team_control.behavior.context import RobotContext, RoleArea, teammate_can_chase_ball
 from team_control.behavior.phases import (
     ChasingBallStateMachine,
     InterceptionStateMachine,
     PassingStateMachine,
     ShootingStateMachine,
-
 )
-from team_control.behavior.phases.ball_handling import is_path_clear
-import numpy as np
-import time
+from team_control.behavior.phases.ball_handling import ReceivingStateMachine
+from team_control.behavior.phases.basic import ShadowBallStateMachine
+from team_control.behavior.role import Role
+from team_control.motion.obstacles.helpers import check_possession
+from team_control.utils.state_machine import StateMachine
 
 MIDFIELDER_AREA = RoleArea(
     x_min=-1500.0,

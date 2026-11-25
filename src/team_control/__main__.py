@@ -17,18 +17,12 @@ Queues:
     - gc_q: Placeholder queue for game controller events (currently unused).
 """
 
-from multiprocessing import Process, Queue, Event
-from team_control.sim.competition_rules_process import competition_example_process
+from multiprocessing import Process, Queue
+
+from team_control.behavior.team import team_control_process
 from team_control.vision.vision_worker import vision_worker
 from team_control.world.model_manager import WorldModelManager
 from team_control.world.model_runner import wm_runner
-from team_control.demos.sandbox_process import sandbox_process
-from team_control.demos.goalie_process import goalie_process
-from team_control.demos.striker_process import striker_process
-from team_control.demos.obstacle_avoidance_process import obstacle_avoidance_process
-from team_control.demos.passing_process import passing_process
-from team_control.demos.interceptor_process import interceptor_process
-from team_control.behavior.team import team_control_process
 
 # in multiprocessing this can only be a simple process
 

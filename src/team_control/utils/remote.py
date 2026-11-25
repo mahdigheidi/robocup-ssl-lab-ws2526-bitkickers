@@ -1,11 +1,13 @@
 
-import pygame
 import time
 
-from team_control.network import Sender
+import pygame
 from team_control.network.robotCommand import RobotCommand
 
-class Remote_robot():
+from team_control.network import Sender
+
+
+class Remote_robot:
     def __init__(self, robot_id=2, isYellow=True):
         self.robot_id = robot_id
         self.us_yellow = isYellow

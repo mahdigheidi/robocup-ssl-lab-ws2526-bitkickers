@@ -11,11 +11,10 @@ This class can be used to:
 Author: Emma
 """
 
-import logging
-import datetime
 import time
 
-class RobotCommand():
+
+class RobotCommand:
     """
     RobotCommand represents the desired motion command for a single robot.
 

@@ -1,15 +1,17 @@
 """Robot class - encapsulates a single robot with its role and phase-based behavior."""
 
 import logging
-from typing import Generic, TypeVar
 from enum import Enum
-from team_control.behavior.roles.goalie import Goalkeeper
+from typing import Generic, TypeVar
+
 import numpy as np
-from team_control.motion.movement import RobotMovement
-from team_control.behavior.role import Role
+
 from team_control.behavior.context import RobotContext, WorldState
-from team_control.sim.spawn_robot import send_robot_to_grsim
+from team_control.behavior.role import Role
+from team_control.behavior.roles.goalie import Goalkeeper
+from team_control.motion.movement import RobotMovement
 from team_control.network.ssl_sockets import grSimSender
+from team_control.sim.spawn_robot import send_robot_to_grsim
 from team_control.utils.state_machine import StateMachine
 
 R = TypeVar("R", bound=Role)

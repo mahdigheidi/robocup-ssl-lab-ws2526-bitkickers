@@ -30,10 +30,11 @@ Raises:
 
 import logging
 import socket
+
 import yaml
 
+from team_control.network.base_udp import BaseSocket
 from team_control.network.robot_command import RobotCommand
-from team_control.network.base_udp import BaseSocket,UDP
 
 try:
     from yaml import CLoader as Loader
@@ -63,7 +64,7 @@ class YamlSender(BaseSocket):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
         try:
-            with open(self.CONFIG_PATH, "r") as file:
+            with open(self.CONFIG_PATH) as file:
                 self.robot = yaml.load(file, Loader=Loader)
         except FileNotFoundError as e:
             raise FileNotFoundError(f"Configuration file not found: {self.CONFIG_PATH}") from e

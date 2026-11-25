@@ -1,15 +1,17 @@
 import random
 import time
+
 import numpy as np
-from team_control.sim.ball_idle_spawner import BallIdleSpawner
-from team_control.network.ssl_sockets import grSimSender
-from team_control.sim.send_ball_grsim import send_ball_to_grsim
-from team_control.world.model import WorldModel
+
+from team_control.behavior import AnsiColors, enable_logging
+from team_control.behavior.context import WorldState
 from team_control.behavior.robot import Robot
 from team_control.behavior.roles import Passer
-from team_control.behavior.context import WorldState, POSSESSION_THRESHOLD
-from team_control.behavior import enable_logging, AnsiColors
 from team_control.motion.obstacles.helpers import check_possession
+from team_control.network.ssl_sockets import grSimSender
+from team_control.sim.ball_idle_spawner import BallIdleSpawner
+from team_control.sim.send_ball_grsim import send_ball_to_grsim
+from team_control.world.model import WorldModel
 
 # --------------------------
 # Ball idle spawner parameters

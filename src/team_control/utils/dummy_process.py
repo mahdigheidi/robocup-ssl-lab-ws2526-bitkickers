@@ -1,8 +1,9 @@
-from team_control.world.model import WorldModel
 from multiprocessing import Queue
-import time
 
-class DummyReader():
+from team_control.world.model import WorldModel
+
+
+class DummyReader:
     def __init__(self, wm:WorldModel,input_queue:Queue):
         self.wm:WorldModel = wm
         self.last_version = 0

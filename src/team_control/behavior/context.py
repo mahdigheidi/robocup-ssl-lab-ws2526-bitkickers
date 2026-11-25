@@ -1,11 +1,11 @@
 from __future__ import annotations
+
 """Robot context and world state - shared data structures for robot state machines."""
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
-import numpy as np
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
+import numpy as np
 
 if TYPE_CHECKING:
     from team_control.world.model import WorldModel
@@ -136,8 +136,9 @@ class RoleArea:
         )
 
     def is_point_legal(self, context: "RobotContext", x: float, y: float, is_goalie: bool = False) -> bool:
-        from team_control.motion.obstacles.helpers import defense_area_polygon_for_team
         from shapely.geometry import Point, Polygon
+
+        from team_control.motion.obstacles.helpers import defense_area_polygon_for_team
         
         area = self.for_team(context.is_yellow)
 
@@ -172,8 +173,12 @@ class RoleArea:
         """
         Projects (x, y) into the nearest legal point inside the role area and within field.
         """
-        from team_control.motion.obstacles.helpers import defense_area_polygon_for_team, ROBOT_RADIUS
         from shapely.geometry import Point, Polygon
+
+        from team_control.motion.obstacles.helpers import (
+            ROBOT_RADIUS,
+            defense_area_polygon_for_team,
+        )
         
         area = self.for_team(context.is_yellow)
         

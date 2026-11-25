@@ -13,11 +13,13 @@ Raises:
 """
 
 import logging
+
 log = logging.getLogger()
 log.setLevel(logging.DEBUG)
 
 from team_control.network.base_udp import BaseSocket, SocketType
-          
+
+
 class Sender(BaseSocket):
     """
     Generic UDP sender socket.

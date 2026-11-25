@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 network_interfaces.py
 
@@ -15,13 +16,14 @@ Author:
     Emma — 2025
 """
 
+from team_control.network.grsim_commands import GrSimRobotCommands
 from team_control.network.proto2 import (
-    ssl_vision_wrapper_pb2,
+    ssl_gc_referee_message_pb2,
     ssl_vision_detection_tracked_pb2,
-    ssl_gc_referee_message_pb2)
+    ssl_vision_wrapper_pb2,
+)
 from team_control.network.receiver import Multicast
 from team_control.network.sender import Sender
-from team_control.network.grsim_commands import GrSimRobotCommands
 
 
 # ===============================

@@ -5,16 +5,20 @@ Usage:
     python obstacle_avoidance_process.py scenario_1
 """
 
+import importlib
 import sys
 import time
-import importlib
-from team_control.network.ssl_sockets import grSimSender
+
+from team_control.motion.movement import RobotMovement
+from team_control.motion.obstacle_pre_processor import preprocess_best_path
 from team_control.motion.obstacles.helpers import check_stop_conditions, distance
 from team_control.network.robot_command import RobotCommand
-from team_control.motion.movement import RobotMovement
-from team_control.sim.spawn_robot import spawn_robots_at_initial_positions, remove_robots_not_in_scenario
+from team_control.network.ssl_sockets import grSimSender
 from team_control.sim.send_ball_grsim import send_ball_to_grsim
-from team_control.motion.obstacle_pre_processor import preprocess_best_path
+from team_control.sim.spawn_robot import (
+    remove_robots_not_in_scenario,
+    spawn_robots_at_initial_positions,
+)
 
 TIME_STEP = 0.05  # seconds
 X_CELL_SIZE = 100  # mm

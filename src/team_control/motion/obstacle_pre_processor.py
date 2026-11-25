@@ -1,10 +1,10 @@
-import math
 import heapq
+import math
+from typing import List, Tuple
+
 import numpy as np
-import sys
-from typing import List, Tuple, Optional
-import matplotlib.pyplot as plt
-from team_control.motion.obstacles.helpers import *
+
+from team_control.motion.obstacles.helpers import COLLISION_DISTANCE, ROBOT_RADIUS
 
 # Field bounds
 X_MIN, X_MAX = -4800.0, 4800.0

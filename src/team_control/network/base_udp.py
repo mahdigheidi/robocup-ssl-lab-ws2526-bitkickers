@@ -10,15 +10,14 @@ Notes / Comments
 This is the modified from the previous BaseUDP.py.
 """
 
-import socket
-import sys
-import time
-import random
-import os 
 import ast
 import enum
-from enum import auto
 import logging
+import os
+import random
+import socket
+import sys
+from enum import auto
 
 # Configure logging
 log = logging.getLogger()
@@ -32,7 +31,7 @@ class SocketType(enum.IntEnum):
     SOCK_UDP = auto()
     SOCK_MULTICAST_UDP = auto()
 
-class BaseSocket():
+class BaseSocket:
     """
     Base class for socket creation and management.
 
@@ -134,7 +133,7 @@ class BaseSocket():
             try:
                 self.sock.bind(self.addr)
                 is_binded = True
-            except socket.error as se:
+            except OSError as se:
                 is_binded = False
                 log.debug(f"socket binding failed: {se}")
                 if self.use_generated_port is True: 

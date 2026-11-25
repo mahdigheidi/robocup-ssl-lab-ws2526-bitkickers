@@ -1,7 +1,8 @@
 ## this is for testing parsing and connectivity
-from team_control.network.ssl_sockets import GameControl
-from team_control.game_controller.message import RefereeMessage
 import time
+
+from team_control.game_controller.message import RefereeMessage
+from team_control.network.ssl_sockets import GameControl
 
 gc_recv = GameControl()
 

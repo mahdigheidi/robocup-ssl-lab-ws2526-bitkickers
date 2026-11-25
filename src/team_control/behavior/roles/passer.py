@@ -1,14 +1,14 @@
 """Passing role - for two-robot passing exercise."""
 from enum import Enum, auto
-from team_control.behavior.role import Role
+
 from team_control.behavior.context import RobotContext
-from team_control.utils.state_machine import StateMachine
 from team_control.behavior.phases import (
     ChasingBallStateMachine,
     PassingStateMachine,
     ReceivingStateMachine,
 )
-
+from team_control.behavior.role import Role
+from team_control.utils.state_machine import StateMachine
 
 
 class Passer(Role):

@@ -1,5 +1,8 @@
-from team_control.game_controller.common import *
-import enum 
+from enum import Enum
+
+from team_control.game_controller.common import Command, Stage
+
+
 class STATE(Enum):
     RUNNING = 0
     HALTED = 1

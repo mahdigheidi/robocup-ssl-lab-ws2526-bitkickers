@@ -2,9 +2,10 @@
 """
 The following is obtained from gc_referee_message.proto
 """
-from enum import Enum, IntEnum
+from enum import Enum
 
 import numpy as np
+
 
 class Command(Enum):
     HALT = 0
@@ -104,7 +105,7 @@ class MatchType(Enum):
     ELIMINATION_PHASE = 2
     FRIENDLY = 3
     
-class Point():
+class Point:
     def __init__(self,point):
         # required
        self.x = float(point.x)

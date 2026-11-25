@@ -1,18 +1,17 @@
 import logging
 from enum import Enum, auto
 
-from team_control.behavior.role import Role
 from team_control.behavior.context import RobotContext
-from team_control.utils.state_machine import StateMachine
 from team_control.behavior.phases.ball_handling import (
     ChasingBallStateMachine,
     #PassingStateMachine,
 )
 from team_control.behavior.phases.basic import (
     HoldPositionFaceBallStateMachine,
-  
-    KickToGoalStateMachine   , 
+    KickToGoalStateMachine,
 )
+from team_control.behavior.role import Role
+from team_control.utils.state_machine import StateMachine
 
 logger = logging.getLogger(__name__)
 

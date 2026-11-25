@@ -10,11 +10,11 @@ This script demonstrates how to:
 """
 
 import time
-from team_control.network.ssl_sockets import grSimSender
-from team_control.network.robot_command import RobotCommand
-from team_control.sim.send_ball_grsim import send_ball_to_grsim
-from team_control.sim.ball_spawner import BallSpawner
+
 from team_control.motion.movement import RobotMovement
+from team_control.network.robot_command import RobotCommand
+from team_control.network.ssl_sockets import grSimSender
+from team_control.sim.ball_spawner import BallSpawner
 
 # --------------------------
 # Ball spawner parameters

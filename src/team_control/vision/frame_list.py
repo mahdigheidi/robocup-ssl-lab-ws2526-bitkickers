@@ -1,11 +1,11 @@
 from __future__ import annotations
-from team_control.vision.frame import Frame
+
 from collections import deque
 
-import numpy as np
-import numpy.typing as npt
+from team_control.vision.frame import Frame
 
-class FrameList ():
+
+class FrameList :
     
     ### THIS IS A LIST CLASS so this would work like a list
     def __init__(self,history:int=60):

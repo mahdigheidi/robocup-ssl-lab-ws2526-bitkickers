@@ -16,8 +16,10 @@ Author: Emma
 """
 
 import time
-from team_control.network.robot_command import RobotCommand
+
 from team_control.network.proto2 import grSim_Commands_pb2, grSim_Packet_pb2
+from team_control.network.robot_command import RobotCommand
+
 
 class GrSimRobotCommands:
     """

@@ -9,22 +9,22 @@ This module controls a single blue robot that:
 
 """
 
-import time
 import math
+import time
+
 import numpy as np
 
-from team_control.network.ssl_sockets import grSimSender
-from team_control.network.robot_command import RobotCommand
+from team_control.behavior.context import POSSESSION_THRESHOLD, WorldState
 from team_control.motion.movement import RobotMovement
-from team_control.behavior.context import WorldState, POSSESSION_THRESHOLD
-from team_control.sim.spawn_robot import send_robot_to_grsim
 from team_control.motion.obstacles.helpers import (
-    is_in_field,
-    point_in_defense_area,
     COLLISION_DISTANCE,
     distance,
+    is_in_field,
+    point_in_defense_area,
 )
-
+from team_control.network.robot_command import RobotCommand
+from team_control.network.ssl_sockets import grSimSender
+from team_control.sim.spawn_robot import send_robot_to_grsim
 
 SAFE_DISTANCE = 600.0          
 KICK_POWER = 5               

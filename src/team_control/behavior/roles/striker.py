@@ -1,25 +1,20 @@
 #stiker role
-from enum import Enum, auto
-import time
 import logging
-from team_control.motion.obstacles.helpers import RoleArea, check_possession
-from team_control.behavior.phases.ball_handling import is_path_blocked
-import numpy as np
-from team_control.behavior.role import Role
-from team_control.behavior.context import RobotContext, teammate_can_chase_ball
-from team_control.utils.state_machine import StateMachine
-from team_control.behavior.phases.basic import (
-    HoldPositionFaceBallStateMachine,
-    InterceptionStateMachine,
-    ShadowBallStateMachine
-)
-from team_control.behavior.phases import (
-    ReceivingStateMachine,
-    ChasingBallStateMachine,
-    StrikerStateMachine,
-    KickToGoalStateMachine,
-)
+import time
+from enum import Enum, auto
 
+import numpy as np
+
+from team_control.behavior.context import RobotContext, RoleArea, teammate_can_chase_ball
+from team_control.behavior.phases import (
+    ChasingBallStateMachine,
+    KickToGoalStateMachine,
+    ReceivingStateMachine,
+    StrikerStateMachine,
+)
+from team_control.behavior.phases.basic import InterceptionStateMachine, ShadowBallStateMachine
+from team_control.behavior.role import Role
+from team_control.motion.obstacles.helpers import check_possession
 
 BALL_SLOW_THRESHOLD = 500
 BALL_DIRECTION_DOT_THRESHOLD = 0.3

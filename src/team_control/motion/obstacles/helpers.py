@@ -1,10 +1,12 @@
 from __future__ import annotations
-import math
-from shapely.geometry import Point, Polygon
-from team_control.behavior.context import RobotContext, WorldState, POSSESSION_THRESHOLD, RoleArea
-import numpy as np
 
-from dataclasses import dataclass
+import math
+
+import numpy as np
+from shapely.geometry import Point, Polygon
+
+from team_control.behavior.context import POSSESSION_THRESHOLD, RobotContext
+
 # ----------------------------------------------------
 # ------------ Constants and Polygons ----------------
 # ----------------------------------------------------

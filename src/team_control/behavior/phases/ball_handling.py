@@ -1,15 +1,15 @@
 """Shared ball handling state machines - reusable across roles."""
-import numpy as np
 import time
-from typing import Optional, Type, Any
-from team_control.utils.state_machine import State, StateMachine
-from team_control.network.ssl_sockets import grSimSender
-from team_control.network.robot_command import RobotCommand
-from team_control.behavior.context import RobotContext, EntityState, POSSESSION_THRESHOLD
-from team_control.sim.ball_idle_spawner import BallIdleSpawner
-from team_control.motion.obstacles.rules import avoid_defense_area_target
-from team_control.motion.obstacles.helpers import RoleArea, avoid_collision_robust
+from typing import Any, Optional, Type
 
+import numpy as np
+
+from team_control.behavior.context import POSSESSION_THRESHOLD, EntityState, RobotContext
+from team_control.motion.obstacles.helpers import avoid_collision_robust
+from team_control.network.robot_command import RobotCommand
+from team_control.network.ssl_sockets import grSimSender
+from team_control.sim.ball_idle_spawner import BallIdleSpawner
+from team_control.utils.state_machine import State, StateMachine
 
 # Configuration Constants
 

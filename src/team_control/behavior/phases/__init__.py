@@ -4,16 +4,15 @@ from team_control.behavior.phases.ball_handling import (
     ChasingBallStateMachine,
     PassingStateMachine,
     ReceivingStateMachine,
-    StrikerStateMachine,
     ShootingStateMachine,
+    StrikerStateMachine,
 )
-
 from team_control.behavior.phases.basic import (
+    BlockingStateMachine,
+    GoalieStateMachine,
     HoldPositionFaceBallStateMachine,
     InterceptionStateMachine,
-    BlockingStateMachine,
     KickToGoalStateMachine,
-    GoalieStateMachine,
 )
 
 __all__ = [

@@ -2,11 +2,11 @@
 
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import TYPE_CHECKING, TypeVar, Generic
+from typing import TYPE_CHECKING, Generic, TypeVar
 
 if TYPE_CHECKING:
-    from team_control.utils.state_machine import StateMachine
     from team_control.behavior.context import RobotContext
+    from team_control.utils.state_machine import StateMachine
 
 PhaseT = TypeVar("PhaseT", bound=Enum)
 

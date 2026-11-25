@@ -1,9 +1,9 @@
-import time
 import random
+import time
+
 from team_control.network.ssl_sockets import grSimSender
-from team_control.network.robot_command import RobotCommand
-from team_control.sim.send_ball_grsim import send_ball_to_grsim
 from team_control.sim.ball_spawner import BallSpawner
+from team_control.sim.send_ball_grsim import send_ball_to_grsim
 
 # Ball spawner parameters
 DIVISION = 'B'          # 'A' or 'B'
@@ -64,7 +64,7 @@ def competition_example_process(wm) -> None:
         if (ball_pos[0] >= spawner.goal_line_x and goal_y_min <=
                 ball_pos[1] <= goal_y_max):
             goal_count_blue += 1
-            print(f"Blue Team scored a GOAL !!!!!")
+            print("Blue Team scored a GOAL !!!!!")
             print(f"Blue Team Goals: {goal_count_blue}")
             print(f"Yellow Team Goals: {goal_count_yellow}")
             spawn_ball_randomly_in_the_middle()
@@ -72,7 +72,7 @@ def competition_example_process(wm) -> None:
         elif (ball_pos[0] <= -spawner.goal_line_x and goal_y_min <=
                 ball_pos[1] <= goal_y_max):
             goal_count_yellow += 1
-            print(f"Yellow Team scored a GOAL !!!!!")
+            print("Yellow Team scored a GOAL !!!!!")
             print(f"Yellow Team Goals: {goal_count_yellow}")
             print(f"Blue Team Goals: {goal_count_blue}")
             spawn_ball_randomly_in_the_middle()

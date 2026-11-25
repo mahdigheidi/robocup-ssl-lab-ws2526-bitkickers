@@ -2,6 +2,7 @@ import functools
 import os
 import sys
 
+
 def redirect_print_to_log(print_is_enabled=True):
     log = ""
     def outer(func):

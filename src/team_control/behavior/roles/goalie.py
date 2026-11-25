@@ -1,21 +1,23 @@
 # goalie role 
-from typing import Optional
 import logging
 import time
-import numpy as np
 from enum import Enum, auto
-from team_control.behavior.role import Role
-from team_control.behavior.context import RobotContext
-from team_control.utils.state_machine import StateMachine
+from typing import Optional
+
+import numpy as np
+
+from team_control.behavior.context import RobotContext, RoleArea
+from team_control.behavior.phases import (
+    GoalieStateMachine,
+    ShootingStateMachine,
+)
 from team_control.behavior.phases.ball_handling import (
     ChasingBallStateMachine,
     PassingStateMachine,
 )
-from team_control.behavior.phases import (
-    GoalieStateMachine, 
-    ShootingStateMachine,
-)
-from team_control.motion.obstacles.helpers import RoleArea, ball_in_defense_area, check_possession
+from team_control.behavior.role import Role
+from team_control.motion.obstacles.helpers import ball_in_defense_area, check_possession
+from team_control.utils.state_machine import StateMachine
 
 logger = logging.getLogger(__name__)
 

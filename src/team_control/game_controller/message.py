@@ -6,10 +6,12 @@ Potential Known Error :
 Some fields within GAME EVENT > EVENT might be optional
 -- fixed 07 July 2025 -- by Emma. 
 """
-from team_control.game_controller.common import *
-from team_control.game_controller.event_class import GameEvent
-from typing import Optional, Union, List
 from dataclasses import dataclass, field
+from typing import List, Optional
+
+from team_control.game_controller.common import Command, MatchType, Point, Stage, has_proto_field
+from team_control.game_controller.event_class import GameEvent
+
 
 @dataclass
 class GameEventProposal:
@@ -28,7 +30,7 @@ class GameEventProposal:
         return cls(id,accepted,game_events)
         
 @dataclass
-class TeamInfo():
+class TeamInfo:
     # def __init__(self,name,score,red_cards,yellow_cards,timeouts,timeout_time,goalkeeper,
     #              foul_counter=None,ball_placement_failures=None,can_place_ball=None,max_allowed_bots=None,
     #                bot_substitution_intent=None,ball_placement_failures_reached=None,bot_substitution_allowed=None,
@@ -84,7 +86,7 @@ class TeamInfo():
                    bot_substitutions_left,bot_substitution_time_left,yellow_card_times)
   
 @dataclass
-class RefereeMessage():
+class RefereeMessage:
     """
     This is the main class !!! 
     parse the protobuf using from proto

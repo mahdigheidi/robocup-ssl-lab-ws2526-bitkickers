@@ -1,11 +1,13 @@
-import math
-from team_control.vision.frame import Robot
 import logging
+import math
+
 import numpy as np
 import numpy.typing as npt
 
+from team_control.vision.robots import Robot
 
-class Nearest():
+
+class Nearest:
 
     """
     Function - Find the nearest robot using the surrounding radius

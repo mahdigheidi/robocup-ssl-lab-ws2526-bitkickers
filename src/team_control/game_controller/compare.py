@@ -1,6 +1,8 @@
-from team_control.game_controller.message import *
-from team_control.network.ssl_sockets import GameControl
 from multiprocessing import Queue
+
+from team_control.game_controller.message import RefereeMessage
+from team_control.network.ssl_sockets import GameControl
+
 
 class GameControllerManager:
     def __init__(self,output_q:Queue,):

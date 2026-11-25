@@ -4,16 +4,16 @@ striker_process.py
 Process for shooting at the goal.
 """
 
-from team_control.network.ssl_sockets import grSimSender
-from team_control.network.robot_command import RobotCommand
-from team_control.sim.send_ball_grsim import send_ball_to_grsim
-from team_control.sim.ball_idle_spawner import BallIdleSpawner
-from team_control.motion.movement import RobotMovement
-
 # from team_control.behavior.shooting import RobotShooting
 # from team_control.behavior.obstacle_avoidance import AvoidObstacle
 import math
 import time
+
+from team_control.motion.movement import RobotMovement
+from team_control.network.robot_command import RobotCommand
+from team_control.network.ssl_sockets import grSimSender
+from team_control.sim.ball_idle_spawner import BallIdleSpawner
+from team_control.sim.send_ball_grsim import send_ball_to_grsim
 
 # --------------------------
 # Ball idle spawner parameters

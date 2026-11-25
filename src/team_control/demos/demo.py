@@ -10,8 +10,8 @@ Usage:
         - `send_command()` for sending RobotCommand objects.
 """
 
-from team_control.network.ssl_sockets import grSimSender
 from team_control.network.robot_command import RobotCommand
+from team_control.network.ssl_sockets import grSimSender
 
 # Target grSim IP and command port
 DESTINATION_IP = "127.0.0.1"

@@ -11,10 +11,11 @@ This script demonstrates how to:
 """
 
 import socket
-from team_control.network.proto2 import grSim_Packet_pb2, grSim_Replacement_pb2
-from team_control.network.ssl_sockets import grSimSender
-from team_control.network.robot_command import RobotCommand
+
 from team_control.motion.movement import RobotMovement
+from team_control.network.proto2 import grSim_Packet_pb2, grSim_Replacement_pb2
+from team_control.network.robot_command import RobotCommand
+from team_control.network.ssl_sockets import grSimSender
 
 
 def set_robot_position(is_yellow, robot_id, x, y, direction=0.0, address="127.0.0.1", port=20011):

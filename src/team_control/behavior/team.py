@@ -2,30 +2,23 @@
 # TEAM CONTROL MAIN FILE
 # ======================
 
-from argparse import ArgumentParser
-import re
-import time
-import sys
-import numpy as np
 import random
-from typing import Optional
-from team_control.sim.ball_spawner import BallSpawner
-from team_control.network.ssl_sockets import grSimSender
-from team_control.sim.send_ball_grsim import send_ball_to_grsim
+import time
+from argparse import ArgumentParser
 
-from team_control.world.model import WorldModel
-from team_control.behavior.robot import Robot
-from team_control.behavior.context import WorldState
+import numpy as np
+
 from team_control.behavior import enable_logging
-
-from team_control.behavior.roles.striker import Striker
-from team_control.behavior.roles.support import Support
+from team_control.behavior.context import WorldState
+from team_control.behavior.robot import Robot
 from team_control.behavior.roles.defender import Defender
 from team_control.behavior.roles.goalie import Goalkeeper
-
-from team_control.behavior.roles.passer import Passer
-
 from team_control.behavior.roles.midfielder import Midfielder
+from team_control.behavior.roles.striker import Striker
+from team_control.network.ssl_sockets import grSimSender
+from team_control.sim.ball_spawner import BallSpawner
+from team_control.sim.send_ball_grsim import send_ball_to_grsim
+from team_control.world.model import WorldModel
 
 SIM_IP = "192.168.178.2"
 CMD_LISTEN_PORT = 20011
@@ -215,7 +208,7 @@ def team_control_process(wm: WorldModel):
 
         if ball_pos[0] >= spawner.goal_line_x and goal_y_min <= ball_pos[1] <= goal_y_max:
             goal_count_blue += 1
-            print(f"Blue Team scored a GOAL !!!!!")
+            print("Blue Team scored a GOAL !!!!!")
             print(f"Blue Team Goals: {goal_count_blue}")
             print(f"Yellow Team Goals: {goal_count_yellow}")
             if run_ball:
@@ -223,7 +216,7 @@ def team_control_process(wm: WorldModel):
 
         elif ball_pos[0] <= -spawner.goal_line_x and goal_y_min <= ball_pos[1] <= goal_y_max:
             goal_count_yellow += 1
-            print(f"Yellow Team scored a GOAL !!!!!")
+            print("Yellow Team scored a GOAL !!!!!")
             print(f"Yellow Team Goals: {goal_count_yellow}")
             print(f"Blue Team Goals: {goal_count_blue}")
             if run_ball:

@@ -1,9 +1,8 @@
-import math
 from team_control.motion.obstacles.helpers import (
-    is_in_field,
-    point_in_defense_area,
     COLLISION_DISTANCE,
     distance,
+    is_in_field,
+    point_in_defense_area,
 )
 
 SAFE_MARGIN = 200.0

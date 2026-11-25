@@ -1,10 +1,7 @@
-from team_control.vision.robots import Team,Robot
-from team_control.vision.balls import Ball
-from collections import deque
-
-import numpy as np
-import numpy.typing as npt
 import logging
+
+from team_control.vision.balls import Ball
+from team_control.vision.robots import Team
 
 log = logging.getLogger()
 log.setLevel(logging.NOTSET)
@@ -15,7 +12,7 @@ def debug_print(*args, **kwargs):
     if debug:
         print(*args, **kwargs)
  
-class Frame():
+class Frame:
     """
     This class contains the FrameDetection Protobuf Data
     It has the following attributes:

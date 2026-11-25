@@ -1,18 +1,19 @@
 from __future__ import annotations
+
 """ Receiver - Socket
 This file includes : 
 1. Receiver - Basic UDP receiver w/ Recieving Functions (exc. sending)
 2. Broadcast - USP Broadcast receiver 
 3. Multicast - UDP Multicast receiver
 """
+#logging
+import logging
 import socket
 import struct
 import time
 
-from team_control.network.base_udp import BaseSocket,SocketType
+from team_control.network.base_udp import BaseSocket, SocketType
 
-#logging
-import logging
 log = logging.getLogger()
 log.setLevel(logging.INFO)
 

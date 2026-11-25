@@ -1,6 +1,7 @@
 from __future__ import annotations
-from typing import Optional
+
 from enum import Enum
+from typing import Optional
 
 
 class FieldShapeType(Enum):
@@ -20,7 +21,7 @@ class FieldShapeType(Enum):
     RightFieldRightPenaltyStretch = 13
 
 
-class Vector2f ():
+class Vector2f :
     def __init__(self,x: float,y: float):
         self.x: float= x
         self.y: float= y 
@@ -32,7 +33,7 @@ class Vector2f ():
     def __repr__(self):
         return f"[{self.x=} , {self.y=}]"
 
-class FieldLines():
+class FieldLines:
     def __init__(self,name : str, p1 : Vector2f, p2 : Vector2f, 
                  thickness : float, type : FieldShapeType=None):
         ## Name of this field marking.
@@ -65,7 +66,7 @@ class FieldLines():
             
 
 
-class FieldArcs():
+class FieldArcs:
     def __init__(self,name : str, center : Vector2f, radius : float,
                  a1 : float ,a2 : float, thickness : float, type : FieldShapeType=None ):
         ## Name of this field marking.
@@ -99,7 +100,7 @@ class FieldArcs():
             )
         else : 
             return None
-class FieldSize():
+class FieldSize:
     def __init__(self, field_length:int, field_width:int, goal_width:int, goal_depth:int, boundary_width:int,
                  field_lines:FieldLines, field_arcs:FieldArcs,
                  penalty_area_depth:int=None ,penalty_area_width:int=None):
@@ -133,7 +134,7 @@ class FieldSize():
             )
         else: 
             return None
-class CameraCalibration():
+class CameraCalibration:
     def __init__(self, camera_id : int, focal_length : float, principal_point_x : float, principal_point_y : float,
         distortion : float, q0 : float, q1 : float, q2 : float, q3 : float, tx : float, ty : float, tz : float, 
         derived_camera_world_tx : float=None, derived_camera_world_ty : float=None, derived_camera_world_tz : float=None,
@@ -189,7 +190,7 @@ class CameraCalibration():
             )
         else : 
             return None
-class BallModelStraightTwoPhase():
+class BallModelStraightTwoPhase:
     def __init__(self, acc_slide : float, acc_roll : float, k_switch : float):
         self.acc_slide : float=acc_slide ## Ball sliding acceleration [m/s^2] (should be negative)
         self.acc_roll : float=acc_roll  ## Ball rolling acceleration [m/s^2] (should be negative)
@@ -209,7 +210,7 @@ class BallModelStraightTwoPhase():
         else:
             return None
 
-class BallModelChipFixedLoss():
+class BallModelChipFixedLoss:
     def __init__(self,damping_xy_first_hop : float, damping_xy_other_hops : float, damping_z : float):
         self.damping_xy_first_hop : float = damping_xy_first_hop 
         self.damping_xy_other_hops : float = damping_xy_other_hops  ## Chip kick velocity damping factor in XY direction for all following hops
@@ -228,7 +229,7 @@ class BallModelChipFixedLoss():
         else:
             return None
         
-class GeometryModels():
+class GeometryModels:
     def __init__(self,straight_two_phase:BallModelStraightTwoPhase=None, chip_fixed_loss:BallModelChipFixedLoss=None):
         self.straight_two_phase:BallModelStraightTwoPhase=straight_two_phase
         self.chip_fixed_loss:BallModelChipFixedLoss=chip_fixed_loss
@@ -246,7 +247,7 @@ class GeometryModels():
         else:
             return None
         
-class GeometryData():
+class GeometryData:
     """
     Geometry data of world Model
     """

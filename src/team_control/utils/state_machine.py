@@ -1,9 +1,9 @@
 """Generic state machine framework."""
 
 import logging
-from abc import ABC, abstractmethod
-from typing import TypeVar, Generic, Optional, Dict, Type, Any
 import time
+from abc import ABC, abstractmethod
+from typing import Any, Dict, Generic, Optional, Type, TypeVar
 
 logger = logging.getLogger(__name__)
 

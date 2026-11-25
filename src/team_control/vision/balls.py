@@ -1,6 +1,7 @@
 
 import numpy as np
 
+
 class Ball:
     def __init__(self,ball_data)->object:
         self.c = float(ball_data.confidence)

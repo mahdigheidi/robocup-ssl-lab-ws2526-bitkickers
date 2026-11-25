@@ -1,8 +1,10 @@
-from multiprocessing import Queue,Process,Event
+from multiprocessing import Queue
+
+from team_control.utils.logger import LogSaver
 from team_control.vision.field import GeometryData
 from team_control.vision.frame import Frame
 from team_control.world.model import WorldModel
-from team_control.utils.logger import LogSaver
+
 
 def wm_runner(wm:WorldModel,vision_q:Queue,gc_q:Queue,interval:int=5):
     logs = LogSaver() 

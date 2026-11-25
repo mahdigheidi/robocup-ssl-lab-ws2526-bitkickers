@@ -9,11 +9,12 @@
     [ ERROR ] : 14:30:46 12-07-2025 : my_script - Line 12 : Connection failed
 """
 
+import inspect
+import logging
 import os
 import sys
-import logging
-import inspect
-from datetime import datetime 
+from datetime import datetime
+
 
 class LogSaver:
     def __init__(

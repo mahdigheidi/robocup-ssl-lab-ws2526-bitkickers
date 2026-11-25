@@ -1,9 +1,9 @@
-from team_control.game_controller.message import RefereeMessage,GameEvent
-from team_control.game_controller.common import Command,Stage,GameEventType,Team
-from team_control.network.ssl_sockets import GameControl
-
+from enum import Enum, auto
 from multiprocessing import Queue
-from enum import Enum,auto
+
+from team_control.game_controller.common import Command, GameEventType, Stage, Team
+from team_control.game_controller.message import RefereeMessage
+from team_control.network.ssl_sockets import GameControl
 
 # these are Enums defined by us
 
@@ -30,7 +30,7 @@ class GameState(Enum):
     PENALTY_DEFEND = auto()
 
 
-class GCfsm ():
+class GCfsm :
     def __init__(self,output_q:Queue,us_positive:bool=None,us_yellow:bool=None):
         self.output_q = output_q
         self.us_yellow = us_yellow

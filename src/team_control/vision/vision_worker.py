@@ -1,14 +1,12 @@
-from team_control.vision.frame import Frame
-from team_control.vision.field import GeometryData
-from team_control.network.ssl_sockets import Vision,VisionTracker
+from multiprocessing import Process, Queue
+
+from team_control.network.ssl_sockets import Vision
 from team_control.utils.logger import LogSaver
-
-import numpy as np
-import numpy.typing as npt
-from multiprocessing import Queue, Process
+from team_control.vision.field import GeometryData
+from team_control.vision.frame import Frame
 
 
-class VisionProcess():
+class VisionProcess:
     GRSIM_CAMERAS = 4
     REAL_LIFE_CAMERAS = 1
     def __init__(self,output_q:Queue,logs,use_grSim:bool=True,vision_port=10006):

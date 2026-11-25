@@ -1,8 +1,10 @@
-from team_control.game_controller.common import *
 from dataclasses import dataclass, field
-from typing import Optional, Union, List
+from typing import List, Optional
 
-class BaseEvent():
+from team_control.game_controller.common import GameEventType, Point, Team, has_proto_field
+
+
+class BaseEvent:
     def __init__(self,event):
         pass
     

@@ -1,4 +1,5 @@
 from typing import Optional
+
 import numpy as np
 
 
@@ -50,7 +51,7 @@ class Robot:
     )
         
 
-class Team ():
+class Team :
     """
     Represents a team of robots (yellow or blue) using a fixed-size array of robot instances.
     

@@ -1,17 +1,18 @@
 import math
 import time
-from team_control.demos.interceptor_process import avoid_collision, block_pass_point, is_safe_from_robots, time_to_reach, safe_target
-from team_control.behavior.phases.ball_handling import calculate_receiver_position, is_path_blocked
-import numpy as np
-from typing import Optional, Type, Any
+from typing import Optional
 
-from team_control.utils.state_machine import State, StateMachine
+import numpy as np
+
+from team_control.behavior.context import RobotContext, RoleArea
+from team_control.behavior.phases.ball_handling import is_path_blocked
+from team_control.demos.interceptor_process import is_safe_from_robots, time_to_reach
+from team_control.motion.obstacles.helpers import avoid_collision_robust
 from team_control.network.robot_command import RobotCommand
-from team_control.behavior.context import RobotContext
 from team_control.network.ssl_sockets import grSimSender
 from team_control.sim.ball_idle_spawner import BallIdleSpawner
-from team_control.motion.obstacles.rules import avoid_defense_area_target
-from team_control.motion.obstacles.helpers import RoleArea, avoid_collision_robust
+from team_control.utils.state_machine import State, StateMachine
+
 
 def clamp(v, lo, hi):
     return max(lo, min(hi, v))

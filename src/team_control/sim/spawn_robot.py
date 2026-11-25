@@ -1,6 +1,6 @@
 import socket
-from team_control.network.proto2 import grSim_Replacement_pb2
-from team_control.network.proto2 import grSim_Packet_pb2
+
+from team_control.network.proto2 import grSim_Packet_pb2, grSim_Replacement_pb2
 
 
 def send_robot_to_grsim(

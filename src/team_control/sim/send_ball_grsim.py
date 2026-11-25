@@ -1,6 +1,6 @@
 import socket
-from team_control.network.proto2 import grSim_Replacement_pb2
-from team_control.network.proto2 import grSim_Packet_pb2
+
+from team_control.network.proto2 import grSim_Packet_pb2, grSim_Replacement_pb2
 
 
 def send_ball_to_grsim(x, y, vx, vy, address="127.0.0.1", port=20011):

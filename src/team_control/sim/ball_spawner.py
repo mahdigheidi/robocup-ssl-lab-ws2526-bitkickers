@@ -3,8 +3,6 @@ Ball spawning logic for grSim sandbox process.
 """
 
 import random
-from team_control.sim.send_ball_grsim import send_ball_to_grsim
-from team_control.network.ssl_sockets import grSimSender
 
 
 class BallSpawner:

@@ -1,5 +1,6 @@
-from multiprocessing import Process, Queue
 from abc import ABC, abstractmethod
+from multiprocessing import Process, Queue
+
 
 class BaseWorker(Process, ABC):
     def __init__(self, run, output: Queue):
