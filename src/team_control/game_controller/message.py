@@ -8,7 +8,7 @@ Some fields within GAME EVENT > EVENT might be optional
 """
 
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Optional
 
 from team_control.game_controller.common import Command, MatchType, Point, Stage, has_proto_field
 from team_control.game_controller.event_class import GameEvent
@@ -18,7 +18,7 @@ from team_control.game_controller.event_class import GameEvent
 class GameEventProposal:
     id: Optional[str] = None
     accepted: Optional[bool] = None
-    game_events: Optional[List[GameEvent]] = field(default_factory=list)
+    game_events: Optional[list[GameEvent]] = field(default_factory=list)
 
     @classmethod
     def from_proto(cls, game_event_proposal):
@@ -66,7 +66,7 @@ class TeamInfo:
     bot_substitution_time_left: Optional[int] = None
 
     ## repeated
-    yellow_card_times: Optional[List[str]] = field(default_factory=list)
+    yellow_card_times: Optional[list[str]] = field(default_factory=list)
 
     @classmethod
     def from_proto(cls, team):
@@ -165,8 +165,8 @@ class RefereeMessage:
     current_action_time_remaining: Optional[int] = None
     status_message: Optional[str] = None
     # Repeated
-    game_events: Optional[List[GameEvent]] = field(default_factory=list)
-    game_event_proposals: Optional[List[GameEventProposal]] = field(default_factory=list)
+    game_events: Optional[list[GameEvent]] = field(default_factory=list)
+    game_event_proposals: Optional[list[GameEventProposal]] = field(default_factory=list)
 
     @classmethod
     def from_proto(cls, referee):

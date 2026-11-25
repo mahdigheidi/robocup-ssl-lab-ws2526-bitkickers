@@ -453,11 +453,6 @@ class KickToGoalState(State[RobotContext]):
         rx, ry, rtheta = context.my_state.position
         bx, by = context.ball.position
 
-        # Check timeout - 5 seconds
-        force_shoot = False
-        if self._enter_time is not None and (time.time() - self._enter_time > 2.0):
-            force_shoot = True
-
         # --------------------------------------------
         # 1. Pick open goal target
         # --------------------------------------------

@@ -40,9 +40,6 @@ class Robot:
         """
         return np.array([self.x, self.y, self.o], dtype=np.float32)
 
-    # def __lt__(self,other):
-    #     return self.id < other.id
-
     def __repr__(self):
         color = "Yellow" if self.isYellow else "Blue"
         return (

@@ -23,8 +23,6 @@ MIDFIELDER_AREA = RoleArea(
     x_max=1500.0,
     y_min=-2900.0,
     y_max=2900.0,
-    # defense_x=-3400.0,
-    # defense_y_half=1100.0,
 )
 
 ROLE_AREA = MIDFIELDER_AREA

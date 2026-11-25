@@ -160,7 +160,6 @@ def team_control_process(wm: WorldModel):
     # World state
     world_state = WorldState()
     version = 0
-    last_time = time.time()
     time.sleep(2)
 
     # MAIN LOOP
@@ -169,14 +168,13 @@ def team_control_process(wm: WorldModel):
         if version < wm.get_version():
             version = wm.get_version()
             now = time.time()
-            last_time = now
 
             world_state.update(wm, now)
 
             for rid, robo in robots.items():
                 try:
                     st = world_state.get_robot_state(rid, is_yellow=True)
-                except Exception as e:
+                except Exception:
                     continue
 
                 if st:
@@ -226,5 +224,3 @@ def team_control_process(wm: WorldModel):
         elif not spawner.is_ball_in_field(ball_pos):
             if run_ball:
                 spawn_ball_randomly_in_the_middle()
-
-        # time.sleep(0.02)

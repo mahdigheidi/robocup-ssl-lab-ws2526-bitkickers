@@ -77,20 +77,15 @@ def main():
         ),
     )
 
-    # Sandbox process for sending commands to grSim
-    # sandbox = Process(target=sandbox_process, args=(wm,))
     team = Process(target=team_control_process, args=(wm,))
-    # competition = Process(target=competition_example_process, args=(wm,))
     # Start all processes
     vision_wkr.start()
     wmr.start()
-    # competition.start()
     team.start()
     # Wait for all processes to finish
     vision_wkr.join()
     wmr.join()
     team.join()
-    # competition.join()
 
 
 if __name__ == "__main__":

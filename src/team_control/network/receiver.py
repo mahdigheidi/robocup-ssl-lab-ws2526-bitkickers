@@ -1,21 +1,17 @@
-from __future__ import annotations
-
-""" Receiver - Socket
+"""Receiver - Socket
 This file includes :
 1. Receiver - Basic UDP receiver w/ Recieving Functions (exc. sending)
 2. Broadcast - USP Broadcast receiver
 3. Multicast - UDP Multicast receiver
 """
-# logging
-import logging
+
+from __future__ import annotations
+
 import socket
 import struct
 import time
 
 from team_control.network.base_udp import BaseSocket, SocketType
-
-log = logging.getLogger()
-log.setLevel(logging.INFO)
 
 
 class Receiver(BaseSocket):
@@ -47,7 +43,6 @@ class Receiver(BaseSocket):
                 result = self.last_message, self.last_addr
                 active = False
             except socket.timeout:
-                # print("timeout")
                 continue
 
             if time.time() >= endTime:
@@ -122,7 +117,6 @@ class Multicast(Receiver):
             str: decoded data
         """
         # Decode with Protobuf
-        # try:
         decoded_data: str = self.decoder.FromString(data)
         return decoded_data
 
@@ -135,7 +129,3 @@ if __name__ == "__main__":
         print("receiver is listening")
         msg, _ = recv.listen()
         print(msg)
-        # print("broadcast is listening")
-        # b_recv.listen()
-        # print("multicast is listening")
-        # m_recv.listen()

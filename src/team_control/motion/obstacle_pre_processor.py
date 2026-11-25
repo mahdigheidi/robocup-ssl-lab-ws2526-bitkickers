@@ -1,6 +1,5 @@
 import heapq
 import math
-from typing import List, Tuple
 
 import numpy as np
 
@@ -16,14 +15,14 @@ NX = int((X_MAX - X_MIN) / CELL)  # 180
 NY = int((Y_MAX - Y_MIN) / CELL)  # 120
 
 
-def cell_center(ix: int, iy: int) -> Tuple[float, float]:
+def cell_center(ix: int, iy: int) -> tuple[float, float]:
     """Return center coordinates (x,y) of cell (ix,iy)."""
     x = X_MIN + (ix + 0.5) * CELL
     y = Y_MIN + (iy + 0.5) * CELL
     return x, y
 
 
-def point_to_cell(x: float, y: float) -> Tuple[int, int]:
+def point_to_cell(x: float, y: float) -> tuple[int, int]:
     """
     Given world coordinates (x,y), return the closest cell indices (ix, iy).
     Clamps to grid bounds.
@@ -55,22 +54,8 @@ def mark_forbidden_rect(a, x0: float, x1: float, y0: float, y1: float):
     return a
 
 
-# # 3. Fill out forbidden areas specified
-# # 3.a rectangular forbidden area: 3400 <= x <= 4400 , -1100 <= y <= 1100
-# mark_forbidden_rect(3400.0, 4400.0, -1100.0, 1100.0)
-
-# # 3.b the four narrow edge strips (assumption explained above)
-# # y in (-3000, -2900) and (2900, 3000)
-# mark_forbidden_rect(X_MIN, X_MAX, 2900.0, Y_MAX)    # top strip (2900,3000)
-# mark_forbidden_rect(X_MIN, X_MAX, Y_MIN, -2900)     # right vertical strip
-
-# # x in (-4500, -4400) and (4400, 4500)
-# mark_forbidden_rect(4400, X_MAX, Y_MIN, Y_MAX)  # bottom strip (-3000,-2900)
-# mark_forbidden_rect(X_MIN, -4400.0, Y_MIN, Y_MAX)    # left vertical strip
-
-
 def mark_static_obstacles(
-    a, static_centers: List[Tuple[float, float]], radius: float = ROBOT_RADIUS
+    a, static_centers: list[tuple[float, float]], radius: float = ROBOT_RADIUS
 ):
     """
     For each static obstacle center, mark its corresponding cell and adjacent cells with 1000.
@@ -117,7 +102,7 @@ def perpendicular_distance_point_to_line(px, py, x1, y1, x2, y2) -> float:
 
 def mark_dynamic_influence(
     a,
-    dynamics: List[Tuple[Tuple[float, float], Tuple[float, float]]],
+    dynamics: list[tuple[tuple[float, float], tuple[float, float]]],
     radius: float = ROBOT_RADIUS,
     inc: float = 100.0,
 ):
@@ -236,7 +221,7 @@ def dijkstra_min_cost(a, start, goal):
 
 
 # Utilities for converting path cells back to world coords
-def cell_to_point(ix: int, iy: int) -> Tuple[float, float]:
+def cell_to_point(ix: int, iy: int) -> tuple[float, float]:
     return cell_center(ix, iy)
 
 
@@ -288,35 +273,3 @@ def preprocess_best_path(
     path_world[-1] = goal
 
     return path_world
-
-
-# --------------------
-# Example usage:
-# --------------------
-# if __name__ == "__main__":
-# # Example static and dynamic obstacles (replace with your data)
-# static_obstacles = [(3270, -700), (2750, -700), (2990, -450), (2700, 0)]
-# dynamic_obstacles = [((1200, 0), (3500, -1700)), ((500, -1500), (2900, -1300))]
-# # mark static obstacles
-
-
-# print("start_cell, goal_cell = ", start_cell, goal_cell)
-
-
-# if path is None:
-#     print("No path found (start or goal may be forbidden or unreachable).")
-# else:
-#     print("Path length (cells):", len(path))
-#     # Convert first few cell indices to world coords to show
-#     for (ix, iy) in path:
-#         a[ix][iy] -= 1000
-
-#     print("First 10 waypoints (world coords):", path_world[:10])
-
-# np.set_printoptions(threshold=sys.maxsize)
-# plt.figure(figsize=(6,10))
-# plt.imshow(a.T, origin='lower')  # transpose so x is horizontal, y is vertical
-# plt.colorbar(label="Cell Value")
-# plt.title("Matrix Visualization (Replace 'a' with your matrix)")
-# plt.tight_layout()
-# plt.show()

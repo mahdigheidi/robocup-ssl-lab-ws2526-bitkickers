@@ -52,19 +52,11 @@ def goalie_process(wm) -> None:
     cmd = RobotCommand(robot_id=ROBOT_ID, vx=vx, vy=vy, w=0, kick=0, dribble=0)
     sender.send_command(cmd)
 
-    # Track number of goals scored
-    goal_count = 0
-
-    # Initial ball spawn
-    # x, y, vx, vy = spawner.spawn_next_ball()
-    # send_ball_to_grsim(x, y, vx, vy)
-
     t = time.time()
 
     while True:
         # Update world model when new frame is available
         if version < wm.get_version():
-            # print(1 / (time.time() - t))
             t = time.time()
             version = wm.get_version()
             try:
@@ -103,7 +95,6 @@ def goalie_process(wm) -> None:
         if ball_pos[0] != prev_ball_pos[0] and ball_speed > SPEED_THRESHOLD:
             # Calculate where ball trajectory intersects the goal line
             slope = ball_velocity_y / ball_velocity_x
-            # y = slope * (x - ball_x) + ball_y
             intersect_y = slope * (goal_center_x - ball_pos[0]) + ball_pos[1]
 
             # Check if intersection is within goal (with margin) and ball is moving toward goal
@@ -112,8 +103,6 @@ def goalie_process(wm) -> None:
 
             if goal_y_min <= intersect_y <= goal_y_max and ball_velocity_x > 0:
                 is_moving_toward_goal = True
-
-        # print(f"\r{is_moving_toward_goal}", end='')
 
         # Case (b): Ball is moving toward goal - intercept the trajectory
         if is_moving_toward_goal:
@@ -180,23 +169,3 @@ def goalie_process(wm) -> None:
         # Send command to robot
         cmd = RobotCommand(robot_id=ROBOT_ID, vx=vx, vy=vy, w=w, kick=1, dribble=0)
         sender.send_command(cmd)
-
-        # ---- CHECK FOR GOAL ----
-        # Check if the ball crossed the goal line and is within the goal posts
-        # goal_y_min = -spawner.goal_width / 2
-        # goal_y_max = spawner.goal_width / 2
-        # if ball_pos[0] >= spawner.goal_line_x and goal_y_min <= ball_pos[1] <= goal_y_max:
-        #     goal_count += 1
-        #     print(f"Total goals so far: {goal_count}")
-        #     # Respawn the ball immediately after a goal
-        #     x, y, vx, vy = spawner.spawn_next_ball()
-        #     send_ball_to_grsim(x, y, vx, vy)
-        #     prev_ball_pos = ball_pos
-        #     ball_pos = (x, y)
-
-        # ---- BALL RESPAWNING LOGIC (DO NOT CHANGE) ----
-        # elif BallSpawner.is_ball_idle(ball_pos, prev_ball_pos) or not spawner.is_ball_in_field(ball_pos):
-        #     x, y, vx, vy = spawner.spawn_next_ball()
-        #     send_ball_to_grsim(x, y, vx, vy)
-        #     prev_ball_pos = ball_pos
-        #     ball_pos = (x, y)

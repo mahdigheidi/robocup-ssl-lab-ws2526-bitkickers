@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 network_interfaces.py
 
@@ -15,6 +13,8 @@ Classes:
 Author:
     Emma — 2025
 """
+
+from __future__ import annotations
 
 from team_control.network.grsim_commands import GrSimRobotCommands
 from team_control.network.proto2 import (
@@ -175,63 +175,3 @@ class grSimSender(Sender):
         packet = self.GSC.convert(robot_command=robot_command, use_team_color=use_team_color)
         encoded_msg = self.GSC.encode(packet)
         self.send(encoded_msg)
-
-
-### NOT IN USE ###
-# ## These are 2 way sockets
-# class grSimControl(Sender):
-#     def __init__(self, ip: str = "127.0.0.1", port: int = 10300) -> None:
-#         """Socket for communicating with grSim Control
-
-#         Args:
-#             ip (str, optional): Ip of Simulation Device. Defaults to None -> self obtain.
-#             port (int, optional): simulation control port. Defaults to 10300.
-#         """
-#         buffer_size = 1024
-#         # self.coder = ssl_simulation_control_pb2.
-#         super().__init__(ip=ip,port=port,buffer_size=buffer_size,binding=False)
-
-#     def listen(self, duration: int = None) -> str:
-#         return super().listen(duration)
-
-#     def decode(self,data):
-#         raise NotImplementedError
-#         decoded_data:str = self.decoder.FromString(data)
-#         print("data received : ", decoded_data)
-#         return decoded_data
-
-#     def send (self,packet) -> None:
-#         self.sock.sendto(packet,(self.ip,self.port))
-#         ...
-
-# class grSimYellowControl(grSimControl):
-#     def __init__(self, ip: str = "127.0.0.1", port: int = 10301) -> None:
-#         super().__init__(ip, port)
-
-#     def listen(self, duration: int = None) -> str | None:
-#         return super().listen(duration)
-
-#     def send(self, packet) -> None:
-#         return super().send(packet)
-
-# class grSimBlueControl(grSimControl):
-#     def __init__(self, ip: str = "127.0.0.1", port: int = 10302) -> None:
-#         """grSim Blue Team Control.
-
-#         Args:
-#             ip (str, optional): ip of simulation. Defaults to None.
-#             port (int, optional): port receiving. Defaults to 10302.
-#         """
-#         super().__init__(ip, port)
-
-#     def listen(self, duration: int = None):
-#         return super().listen(duration)
-
-#     def send(self, packet) -> None:
-#         return super().send(packet)
-
-
-# if __name__ == "__main__":
-#     recv = GameControl()
-#     data,addr = recv.listen()
-#     print(f"{data} \n received from {addr}.")

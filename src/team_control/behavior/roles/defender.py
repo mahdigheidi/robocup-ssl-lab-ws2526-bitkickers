@@ -133,7 +133,6 @@ class Defender(Role):
             # Switch to INTERCEPTING if teammate has ball, to block lanes
             # Or RECEIVING if we are waiting for a pass
             if robot.current_phase != self.Phase.INTERCEPTING:
-                # logger.info("Defender: teammate has ball → INTERCEPTING")
                 robot.switch_phase(self.Phase.INTERCEPTING)
             return
 
@@ -172,13 +171,11 @@ class Defender(Role):
 
             if closest:
                 if robot.current_phase != self.Phase.CHASING:
-                    # logger.info("Defender: ball free in zone and closest → CHASING")
                     robot.switch_phase(self.Phase.CHASING)
                 return
             else:
                 # If not closest, INTERCEPT/BLOCK instead of CHASING
                 if robot.current_phase != self.Phase.INTERCEPTING:
-                    # logger.info("Defender: ball free but teammate closer → INTERCEPTING")
                     robot.switch_phase(self.Phase.INTERCEPTING)
                 return
 
@@ -186,7 +183,6 @@ class Defender(Role):
         # 5) Ball outside zone → SHADOW
         # --------------------------------------------------
         if robot.current_phase != self.Phase.SHADOW:
-            # logger.info("Defender: ball outside zone → SHADOW")
             robot.switch_phase(self.Phase.SHADOW)
 
 

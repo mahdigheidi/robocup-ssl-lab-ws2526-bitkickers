@@ -85,20 +85,14 @@ def sandbox_process(wm) -> None:
     robot_pos = 0, 0, 0
     ball_pos = 0, 0
 
-    # cmd = RobotCommand(robot_id=1, vx=500, vy=0, w=0, kick=0, dribble=0)
-    # sender.send_command(cmd)
-    # print("Test command sent")
     robot_movement = RobotMovement()
-    # set_robot_position(True, 0, 4200, 1800)
     set_robot_position(True, 0, 4000, 0)
-    # set_robot_position(True, 0, random.uniform(-5500, 5500), random.uniform(-4500, 4500))
     while True:
         # Update world model when new frame is available
         if version < wm.get_version():
             version = wm.get_version()
             try:
                 robot_obj = wm.get_yellow_robots(isYellow=IS_YELLOW, robot_id=ROBOT_ID)
-                robots = wm.get_yellow_robots(isYellow=IS_YELLOW, robot_id=None)
                 robot_pos = robot_obj.position
                 ball_pos = wm.get_latest_frame().ball.position
             except Exception:
@@ -107,7 +101,6 @@ def sandbox_process(wm) -> None:
 
         # Set target position
         target_position = 0, 0  # Center of the field
-        # target_position = ball_pos  # Ball
 
         # Compute velocities to move toward the target
         vx, vy = robot_movement.go_to(

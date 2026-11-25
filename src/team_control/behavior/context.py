@@ -1,9 +1,9 @@
-from __future__ import annotations
-
 """Robot context and world state - shared data structures for robot state machines."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -48,7 +48,7 @@ class RobotContext:
     teammates: dict[int, EntityState]  # Other robots on my team (excluding self)
     opponents: dict[int, EntityState]  # All robots on opposing team
     has_possession: bool
-    preferred_teammate: Optional[int] = None
+    preferred_teammate: int | None = None
 
     def __post_init__(self):
         """Validate shapes and constraints."""
@@ -65,7 +65,7 @@ class RobotContext:
 
 # Role area definitions for each robot ID (excluding goalie=0 who has special rules)
 # These must match the areas defined in each role file
-_ROLE_AREAS_BY_ID: dict[int, "RoleArea"] = {}  # Populated after RoleArea is defined
+_ROLE_AREAS_BY_ID: dict[int, RoleArea] = {}  # Populated after RoleArea is defined
 
 
 def _init_role_areas():
@@ -113,7 +113,7 @@ class RoleArea:
     defense_x: float | None = None
     defense_y_half: float | None = None
 
-    def for_team(self, is_yellow: bool) -> "RoleArea":
+    def for_team(self, is_yellow: bool) -> RoleArea:
         if is_yellow:
             return self
 
@@ -130,7 +130,7 @@ class RoleArea:
         )
 
     def is_point_legal(
-        self, context: "RobotContext", x: float, y: float, is_goalie: bool = False
+        self, context: RobotContext, x: float, y: float, is_goalie: bool = False
     ) -> bool:
         from shapely.geometry import Point, Polygon
 
@@ -158,7 +158,7 @@ class RoleArea:
 
     def project_to_legal_area(
         self,
-        context: "RobotContext",
+        context: RobotContext,
         x: float,
         y: float,
         is_goalie: bool = False,
@@ -239,7 +239,7 @@ class WorldState:
         self._prev_robot_positions: dict[tuple[bool, int], np.ndarray] = {}
         self._prev_timestamp: float | None = None
 
-    def update(self, wm: "WorldModel", timestamp: float) -> None:
+    def update(self, wm: WorldModel, timestamp: float) -> None:
         """Update world state from world model.
 
         Args:
@@ -288,7 +288,7 @@ class WorldState:
         self._prev_ball_pos = ball_pos.copy()
         self._prev_timestamp = timestamp
 
-    def get_robot_context(self, robot_id: int, is_yellow: bool) -> "RobotContext":
+    def get_robot_context(self, robot_id: int, is_yellow: bool) -> RobotContext:
         """Build RobotContext for a specific robot.
 
         Args:

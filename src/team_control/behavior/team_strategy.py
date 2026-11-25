@@ -9,7 +9,6 @@ DECISION TREE:
 """
 
 from dataclasses import dataclass
-from typing import List
 
 import numpy as np
 
@@ -51,7 +50,7 @@ class BaseStrategy:
         is_yellow: bool,
         section: FieldSection,
         field_limits: FieldSection,
-        goal_points: List[np.ndarray],
+        goal_points: list[np.ndarray],
         config: StrategyConfig,
     ):
         self.robot_id = robot_id

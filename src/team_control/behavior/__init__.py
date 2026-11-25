@@ -23,13 +23,13 @@ def enable_logging():
     """Configure logging for robot modules. Call this once at the start of your process."""
     # Configure logging for robot modules ONLY - don't touch root logger
     robot_logger = logging.getLogger("team_control.behavior")
-    robot_logger.setLevel(logging.INFO)
+    robot_logger.setLevel(logging.INFO)  # DEBUG shows every phase transition
     robot_handler = logging.StreamHandler()
     robot_handler.setFormatter(ColoredFormatter("[%(asctime)s] %(message)s", datefmt="%H:%M:%S"))
     robot_logger.addHandler(robot_handler)
     robot_logger.propagate = False  # Don't propagate to root logger
 
     state_logger = logging.getLogger("team_control.utils.state_machine")
-    state_logger.setLevel(logging.DEBUG)
+    state_logger.setLevel(logging.INFO)  # DEBUG shows every state transition
     state_logger.addHandler(robot_handler)
     state_logger.propagate = False  # Don't propagate to root logger

@@ -20,8 +20,7 @@ import sys
 from enum import auto
 
 # Configure logging
-log = logging.getLogger()
-log.setLevel(logging.DEBUG)
+log = logging.getLogger(__name__)
 
 
 class SocketType(enum.IntEnum):
@@ -190,7 +189,6 @@ class BaseSocket:
             ip = socket.gethostbyname(socket.gethostname())
         elif os_system == "linux":
             ip = os.popen("hostname -I").read().strip().split(" ")[0]
-            # ip = os.popen('hostname -I').read().strip().split(" ")[1] # for jetsons
             print(f"available : {os.popen('hostname -I').read().strip().split(' ')} , using : {ip}")
         elif os_system == "darwin":
             ip = os.popen("ipconfig getifaddr en0").read().strip()

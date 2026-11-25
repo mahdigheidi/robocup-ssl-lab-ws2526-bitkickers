@@ -16,7 +16,7 @@ from team_control.behavior.phases.ball_handling import (
     PassingStateMachine,
 )
 from team_control.behavior.role import Role
-from team_control.motion.obstacles.helpers import ball_in_defense_area, check_possession
+from team_control.motion.obstacles.helpers import ball_in_defense_area
 from team_control.utils.state_machine import StateMachine
 
 logger = logging.getLogger(__name__)
@@ -46,7 +46,6 @@ class Goalkeeper(Role):
         return self.Phase.ACTIVE
 
     def create_phase_machine(self, phase: Phase) -> StateMachine[RobotContext]:
-        # logger.info(f"[GOALIE] Creating phase machine: {phase.name}")
 
         if phase == self.Phase.ACTIVE:
             return GoalieStateMachine(ROLE_AREA)
@@ -65,9 +64,6 @@ class Goalkeeper(Role):
         # Check if ball is inside THIS goalie's defense area
 
         y_defense = ball_in_defense_area(context, context.ball.position)
-        teammate_has_ball = any(
-            check_possession(context.ball.position, t.position) for t in context.teammates.values()
-        )
 
         # Conflict Resolution: Multiple robots with ball
         my_dist = np.linalg.norm(context.my_state.position[:2] - context.ball.position[:2])

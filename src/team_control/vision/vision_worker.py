@@ -65,8 +65,7 @@ if __name__ == "__main__":
     def read(input_q):
         while True:
             if not input_q.empty():
-                item = input_q.get_nowait()
-                # print(type(item))
+                input_q.get_nowait()
 
     output_q = Queue()
     vision = Process(target=vision_worker, args=(output_q,))

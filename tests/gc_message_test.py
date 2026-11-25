@@ -6,7 +6,7 @@ from team_control.network.ssl_sockets import GameControl
 
 gc_recv = GameControl()
 
-for i in range(5):
+for _ in range(5):
     ref_msg, _ = gc_recv.listen()
     start_time = time.time()
     new_ref_msg = RefereeMessage.from_proto(referee=ref_msg)

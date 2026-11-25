@@ -63,7 +63,6 @@ def obstacle_avoidance_process(wm):
     robot_movement = RobotMovement()
     robots_yellow = wm.get_our_robots(True)
     robots_blue = wm.get_our_robots(False)
-    # sender_yellow.send_command(RobotCommand(robot_id=ROBOT_ID, vx=-3, vy=-3, w=0.0, kick=0, dribble=0))
 
     # Remove Robots that are not present in the scenario
     remove_robots_not_in_scenario(robots_yellow, robots_blue, static_robots, dynamic_robots)

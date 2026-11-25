@@ -31,7 +31,6 @@ def inside_zone(context: RobotContext) -> bool:
 class Support(Role):
     class Phase(Enum):
         CHASING = auto()
-        # PASSING = auto()
         HOLD = auto()
         KICK_TO_GOAL = auto()
 
@@ -45,13 +44,9 @@ class Support(Role):
     # Phase → StateMachine mapping
     # --------------------------------------------------
     def create_phase_machine(self, phase: Phase) -> StateMachine[RobotContext]:
-        # logger.info(f"[SUPPORT] Creating phase machine: {phase.name}")
 
         if phase == self.Phase.CHASING:
             return ChasingBallStateMachine()
-
-        # if phase == self.Phase.PASSING:
-        # return PassingStateMachine()
 
         if phase == self.Phase.KICK_TO_GOAL:
             return KickToGoalStateMachine()
@@ -65,7 +60,6 @@ class Support(Role):
     # Phase transitions
     def update_phase(self, robot, context: RobotContext):
         # -------- OUTSIDE ZONE CHECK --------
-        inside = inside_zone(context)
         ball_inside = inside_zone(context)
 
         if not ball_inside:

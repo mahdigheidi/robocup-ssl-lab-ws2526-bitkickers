@@ -26,7 +26,6 @@ class GameState(Enum):
     KICKOFF = auto()
 
     HALF_TIME = auto()
-    # TIME_OUT = auto()
 
     PENALTY_SHOOT = auto()
     PENALTY_DEFEND = auto()
@@ -143,8 +142,6 @@ class GCfsm:
         elif new_ref_msg.blue.name == our_team_name:
             us_yellow = False
 
-        # self.update_cards()
-
         if new_ref_msg.blue_team_on_positive_half is None:
             pass
         elif new_ref_msg.blue_team_on_positive_half is True:
@@ -164,7 +161,6 @@ class GCfsm:
 
         elif self.us_yellow is None:
             # warning log saying this is none
-            # raise AttributeError ("US YELLOW = NONE -> need our TeamName")
             return
 
     def check_state(self, new_ref_msg: RefereeMessage):
@@ -218,11 +214,6 @@ class GCfsm:
             else:
                 state = GameState.RUNNING
 
-        # elif command == Command.TIMEOUT_YELLOW :
-        #     state = GameState.TIME_OUT if self.us_yellow is True else GameState.HALTED
-        # elif command == Command.TIMEOUT_BLUE :
-        #     state = GameState.TIME_OUT if self.us_yellow is False else GameState.HALTED
-
         else:
             state = GameState.HALTED
             if stage == Stage.NORMAL_HALF_TIME or stage == Stage.EXTRA_HALF_TIME:
@@ -236,7 +227,6 @@ class GCfsm:
 
     def check_game_events(self, new_ref_msg: RefereeMessage):
         game_events = new_ref_msg.game_events
-        location = None
         if len(game_events) == 0:
             return
 
@@ -245,7 +235,6 @@ class GCfsm:
                 e.type == GameEventType.BALL_LEFT_FIELD_TOUCH_LINE
                 or e.type == GameEventType.BALL_LEFT_FIELD_GOAL_LINE
             ):
-                # self.forward_ball_location(e.event_data)
                 print("ball_left_field")
             if e.type == GameEventType.BOT_SUBSTITUTION:
                 our_team = Team.YELLOW if self.us_yellow else Team.BLUE

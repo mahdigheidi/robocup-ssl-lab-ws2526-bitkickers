@@ -126,9 +126,6 @@ class RobotMovement:
             x += kicker_offset * math.cos(theta)
             y += kicker_offset * math.sin(theta)
 
-        # Convert target from world coordinates to robot coordinates
-        # dx, dy = world2robot((x, y, theta), target_xy) # type: ignore
-
         # -------------------------------
         # OBSTACLE-AWARE TARGET SELECTION
         # -------------------------------

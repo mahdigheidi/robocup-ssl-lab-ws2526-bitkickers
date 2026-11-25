@@ -4,8 +4,6 @@ striker_process.py
 Process for shooting at the goal.
 """
 
-# from team_control.behavior.shooting import RobotShooting
-# from team_control.behavior.obstacle_avoidance import AvoidObstacle
 import math
 import time
 
@@ -27,7 +25,6 @@ def striker_process(wm) -> None:
     CMD_LISTEN_PORT = 20011
     IS_YELLOW = False
     ROBOT_ID = 0
-    seed = 100
 
     # Initialize grSim command sender
     sender = grSimSender(ip=SIM_IP, port=CMD_LISTEN_PORT, is_yellow=IS_YELLOW)
@@ -36,7 +33,6 @@ def striker_process(wm) -> None:
     version = 0
     robot_pos = (0, 0, 0)
     ball_pos = (0, 0)
-    prev_ball_pos = (-1, -1)
 
     # Initialize BallSpawner
     spawner = BallIdleSpawner(division=DIVISION)
@@ -60,12 +56,10 @@ def striker_process(wm) -> None:
             try:
                 robot_obj = wm.get_yellow_robots(isYellow=IS_YELLOW, robot_id=ROBOT_ID)
                 robot_pos = robot_obj.position
-                prev_ball_pos = ball_pos
                 ball_pos = wm.get_latest_frame().ball.position
 
             except Exception:
                 robot_pos = 0, 0, 0
-                prev_ball_pos = (-1, -1)
                 ball_pos = 0, 0
 
         # ---- STRIKER STRATEGY ----

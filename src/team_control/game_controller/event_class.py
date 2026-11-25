@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Optional
 
 from team_control.game_controller.common import GameEventType, Point, Team, has_proto_field
 
@@ -428,7 +428,7 @@ class GameEvent:
     type: Optional[GameEventType] = None
     created_timestamp: Optional[int] = None
     id: Optional[str] = None
-    origin: Optional[List[str]] = field(default_factory=list)
+    origin: Optional[list[str]] = field(default_factory=list)
     event_data: Optional[BaseEvent] = None
 
     @classmethod
@@ -446,7 +446,7 @@ class GameEvent:
             else None
         )
         # repeated
-        origin: List[str] = [str(origin) for origin in getattr(game_event, "origin", [])]
+        origin: list[str] = [str(origin) for origin in getattr(game_event, "origin", [])]
         # Event object
         event_data = None
         if type in EVENT_MAP:

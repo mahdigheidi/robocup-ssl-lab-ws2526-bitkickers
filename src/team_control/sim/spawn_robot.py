@@ -51,11 +51,6 @@ def send_robot_to_grsim(
     sock.sendto(data, (address, port))
     sock.close()
 
-    # print(
-    #     f"Robot sent to grSim: team={'Yellow' if team_yellow else 'Blue'} "
-    #     f"ID={robot_id} pos=({x:.1f},{y:.1f}) dir={orientation:.2f} "
-    # )
-
 
 def spawn_robots_at_initial_positions(main_agent, static_robots, dynamic_robots):
     # spawn main robot

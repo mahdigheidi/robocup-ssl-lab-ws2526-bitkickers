@@ -47,8 +47,6 @@ class BallSpawner:
         if self.division == "B":
             self.field_x_min, self.field_x_max = -4500, 4500
             self.field_y_min, self.field_y_max = -3000, 3000
-            # self.goal_line_x = 4200
-            # self.goal_width = 950
             self.goal_line_x = 4500
             self.goal_width = 1000
         elif self.division == "A":

@@ -12,11 +12,6 @@ Raises:
     NotImplementedError - if user attempts to use Multicaster.
 """
 
-import logging
-
-log = logging.getLogger()
-log.setLevel(logging.DEBUG)
-
 from team_control.network.base_udp import BaseSocket, SocketType
 
 
@@ -123,7 +118,6 @@ if __name__ == "__main__":
 
     sender = Sender(ip="", port=50514)
     while True:
-        # time.sleep(2)
         for i in range(500):
             sender.send(str(i))
         time.sleep(1)  # prevent network flooding

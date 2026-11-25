@@ -1,10 +1,5 @@
-import logging
-
 from team_control.vision.balls import Ball
 from team_control.vision.robots import Team
-
-log = logging.getLogger()
-log.setLevel(logging.NOTSET)
 
 debug = False
 

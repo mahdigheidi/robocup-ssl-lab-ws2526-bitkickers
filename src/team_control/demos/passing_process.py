@@ -28,6 +28,18 @@ BALL_DIRECTION_DOT_THRESHOLD = 0.3  # Cosine threshold for "moving towards" chec
 # ============================================================================
 
 
+def ball_moving_toward(robot_pos: np.ndarray, ball_pos, ball_velocity, ball_speed: float) -> bool:
+    """True if the ball is moving roughly towards robot_pos."""
+    if ball_speed < BALL_SLOW_THRESHOLD:
+        return False
+    ball_dir = ball_velocity / ball_speed
+    to_robot = robot_pos[:2] - ball_pos
+    dist = np.linalg.norm(to_robot)
+    if dist < 1:
+        return False
+    return np.dot(ball_dir, to_robot / dist) > 0.3
+
+
 def distance(pos0: np.ndarray, pos1: np.ndarray) -> float:
     """Calculate Euclidean distance between two 2D positions."""
     return float(np.linalg.norm(pos0[:2] - pos1[:2]))
@@ -106,8 +118,6 @@ def passing_process(wm: WorldModel):
     start_time = time.time()
     pass_count = 0
     last_possessor = None
-    blue_possession_start = None
-    BLUE_POSSESSION_DURATION = 0.3
 
     PASSING_MIN_DISTANCE = 4000
 
@@ -125,8 +135,6 @@ def passing_process(wm: WorldModel):
     send_ball_to_grsim(ball_x / 1000, ball_y / 1000, 0, 0)
     time.sleep(0.1)
 
-    blue_robot_state = None  # Initialize outside loop
-
     while time.time() - start_time < TIME_LIMIT:
         if version < wm.get_version():
             version = wm.get_version()
@@ -139,7 +147,6 @@ def passing_process(wm: WorldModel):
                 # Get robot positions from world state
                 robot0_state = world_state.get_robot_state(0, is_yellow=True)
                 robot1_state = world_state.get_robot_state(1, is_yellow=True)
-                blue_robot_state = world_state.get_robot_state(0, is_yellow=False)
 
                 if robot0_state:
                     robot0.update_position(robot0_state.position)
@@ -159,24 +166,13 @@ def passing_process(wm: WorldModel):
 
         ball_speed = np.linalg.norm(ball_velocity)
 
-        # Check if ball is moving toward each robot
-        def ball_moving_toward(robot_pos: np.ndarray) -> bool:
-            if ball_speed < BALL_SLOW_THRESHOLD:
-                return False
-            ball_dir = ball_velocity / ball_speed
-            to_robot = robot_pos[:2] - ball_pos
-            dist = np.linalg.norm(to_robot)
-            if dist < 1:
-                return False
-            return np.dot(ball_dir, to_robot / dist) > 0.3
-
         # Switch phases based on ball responsibility
         if passer_id == 0:
             # Robot 0 is responsible for the ball
             if check_possession(ball_pos, robot0.position):
                 robot0.switch_phase(Passer.Phase.PASSING)
                 robot1.switch_phase(Passer.Phase.RECEIVING)
-            elif ball_moving_toward(robot0.position):
+            elif ball_moving_toward(robot0.position, ball_pos, ball_velocity, ball_speed):
                 # Ball is moving toward robot 0 - receive it
                 robot0.switch_phase(Passer.Phase.RECEIVING)
                 robot1.switch_phase(Passer.Phase.RECEIVING)
@@ -189,7 +185,7 @@ def passing_process(wm: WorldModel):
             if check_possession(ball_pos, robot1.position):
                 robot1.switch_phase(Passer.Phase.PASSING)
                 robot0.switch_phase(Passer.Phase.RECEIVING)
-            elif ball_moving_toward(robot1.position):
+            elif ball_moving_toward(robot1.position, ball_pos, ball_velocity, ball_speed):
                 # Ball is moving toward robot 1 - receive it
                 robot1.switch_phase(Passer.Phase.RECEIVING)
                 robot0.switch_phase(Passer.Phase.RECEIVING)
@@ -216,10 +212,6 @@ def passing_process(wm: WorldModel):
         has_robot0 = check_possession(ball_pos, robot0.position)
         has_robot1 = check_possession(ball_pos, robot1.position)
 
-        has_blue = False
-        if blue_robot_state:
-            has_blue = check_possession(ball_pos, blue_robot_state.position)
-
         current_possessor = None
         if has_robot0:
             current_possessor = 0
@@ -240,17 +232,6 @@ def passing_process(wm: WorldModel):
             last_possessor = current_possessor
 
         # ---- STOPPING CONDITIONS ----
-
-        # if has_blue:
-        #     if blue_possession_start is None:
-        #         blue_possession_start = time.time()
-        #     elif time.time() - blue_possession_start >= BLUE_POSSESSION_DURATION:
-        #         print("Blue robot intercepted the ball!")
-        #         break
-        #         #pass
-
-        else:
-            blue_possession_start = None
 
         if not spawner.is_ball_in_field(ball_pos):
             print("Ball is out of field!")

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Optional
 
 
 class FieldShapeType(Enum):
@@ -47,7 +46,7 @@ class FieldLines:
         ## Thickness of the line segment.
         self.thickness: float = thickness
         ## The type of this shape (Optional)
-        self.type: Optional[FieldShapeType] = type
+        self.type: FieldShapeType | None = type
 
     def __repr__(self):
         return f"\n{self.name=} \t {self.p1=} \t {self.p2=} \t {self.thickness=} \t {self.type=}"
@@ -93,7 +92,7 @@ class FieldArcs:
         ## Thickness of the arc.
         self.thickness: float = thickness
         ## The type of this shape (Optional)
-        self.type: Optional[FieldShapeType] = type
+        self.type: FieldShapeType | None = type
 
     def __repr__(self):
         return f"{self.name=} \t {self.center=} \t {self.radius=} \t {self.a1=} \t {self.a2=} \t {self.thickness=}\t {self.type=}"
@@ -134,8 +133,8 @@ class FieldSize:
         self.boundary_width: int = boundary_width
         self.field_lines: list[FieldLines] = field_lines
         self.field_arcs: list[FieldArcs] = field_arcs
-        self.penalty_area_depth: Optional[int] = penalty_area_depth  # (Optional)
-        self.penalty_area_width: Optional[int] = penalty_area_width  # (Optional)
+        self.penalty_area_depth: int | None = penalty_area_depth  # (Optional)
+        self.penalty_area_width: int | None = penalty_area_width  # (Optional)
 
     def __repr__(self):
         return (
@@ -195,11 +194,11 @@ class CameraCalibration:
         self.tx: float = tx
         self.ty: float = ty
         self.tz: float = tz
-        self.derived_camera_world_tx: Optional[float] = derived_camera_world_tx
-        self.derived_camera_world_ty: Optional[float] = derived_camera_world_ty
-        self.derived_camera_world_tz: Optional[float] = derived_camera_world_tz
-        self.pixel_image_width: Optional[int] = pixel_image_width
-        self.pixel_image_height: Optional[int] = pixel_image_height
+        self.derived_camera_world_tx: float | None = derived_camera_world_tx
+        self.derived_camera_world_ty: float | None = derived_camera_world_ty
+        self.derived_camera_world_tz: float | None = derived_camera_world_tz
+        self.pixel_image_width: int | None = pixel_image_width
+        self.pixel_image_height: int | None = pixel_image_height
 
     def __repr__(self):
         return (

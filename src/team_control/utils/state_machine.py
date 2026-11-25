@@ -3,7 +3,7 @@
 import logging
 import time
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Generic, Optional, Type, TypeVar
+from typing import Any, Generic, Optional, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +18,7 @@ class State(ABC, Generic[TContext]):
     """Abstract base class for states in a state machine."""
 
     @abstractmethod
-    def handle_transition(self, context: TContext) -> Optional[Type["State[TContext]"]]:
+    def handle_transition(self, context: TContext) -> Optional[type["State[TContext]"]]:
         """
         Check if state should transition to another state.
 
@@ -70,7 +70,7 @@ class StateMachine(Generic[TContext]):
         Args:
             initial_state: The initial state to start in
         """
-        self._states: Dict[Type[State[TContext]], State[TContext]] = {}
+        self._states: dict[type[State[TContext]], State[TContext]] = {}
         self._current_state = initial_state
         self._states[type(initial_state)] = initial_state
 
@@ -83,7 +83,7 @@ class StateMachine(Generic[TContext]):
         """
         self._states[type(state)] = state
 
-    def get_current_state_type(self) -> Type[State[TContext]]:
+    def get_current_state_type(self) -> type[State[TContext]]:
         """Get the type of the current state."""
         return type(self._current_state)
 
@@ -91,7 +91,7 @@ class StateMachine(Generic[TContext]):
         """Get the current state instance."""
         return self._current_state
 
-    def update(self, context: TContext) -> Type[State[TContext]]:
+    def update(self, context: TContext) -> type[State[TContext]]:
         """
         Update the state machine - check for transitions.
 
@@ -135,15 +135,15 @@ class StateMachine(Generic[TContext]):
             old_state = self._current_state
             self._current_state = self._states[next_state_type]
 
-            # Log state transition with robot ID if available
             if hasattr(context, "robot_id"):
-                pass
-                # logger.debug(
-                # f"    R{context.robot_id} state: "
-                # f"{old_state.__class__.__name__} -> {self._current_state.__class__.__name__}"
-                # )
+                logger.debug(
+                    "    R%s state: %s -> %s",
+                    context.robot_id,
+                    type(old_state).__name__,
+                    type(self._current_state).__name__,
+                )
 
-    def force_transition(self, state_type: Type[State[TContext]], context: TContext) -> None:
+    def force_transition(self, state_type: type[State[TContext]], context: TContext) -> None:
         """
         Force a transition to a specific state type.
 

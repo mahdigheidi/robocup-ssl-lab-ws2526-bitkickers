@@ -1,7 +1,6 @@
 import random
 import time
 
-from team_control.network.ssl_sockets import grSimSender
 from team_control.sim.ball_spawner import BallSpawner
 from team_control.sim.send_ball_grsim import send_ball_to_grsim
 
@@ -17,10 +16,6 @@ def competition_example_process(wm) -> None:
     # Initialize match standing
     goal_count_blue = 0
     goal_count_yellow = 0
-
-    # Initialize grSim command sender
-    sender_yellow = grSimSender(ip=SIM_IP, port=CMD_LISTEN_PORT, is_yellow=True)
-    sender_blue = grSimSender(ip=SIM_IP, port=CMD_LISTEN_PORT, is_yellow=False)
 
     # Initialize world model version
     version = 0
@@ -41,8 +36,6 @@ def competition_example_process(wm) -> None:
                 continue
 
             try:
-                robots_yellow = wm.get_our_robots(True)
-                robots_blue = wm.get_our_robots(False)
                 ball_pos = wm.get_latest_frame().ball.position
 
             except (AttributeError, KeyError, IndexError):

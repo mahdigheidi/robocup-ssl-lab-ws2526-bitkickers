@@ -1,7 +1,7 @@
 """Shared ball handling state machines - reusable across roles."""
 
 import time
-from typing import Any, Optional, Type
+from typing import Any, Optional
 
 import numpy as np
 
@@ -78,7 +78,7 @@ class ChasingBallState(State[RobotContext]):
         self.role_area = role_area
         self.is_goalie = is_goalie
 
-    def handle_transition(self, context: RobotContext) -> Optional[Type[State[RobotContext]]]:
+    def handle_transition(self, context: RobotContext) -> Optional[type[State[RobotContext]]]:
         ball_dist = distance(context.ball.position, context.my_state.position)
         if ball_dist < CHASE_TO_APPROACH_DISTANCE:
             return ApproachingBallState
@@ -131,7 +131,7 @@ class ApproachingBallState(State[RobotContext]):
         self.role_area = role_area
         self.is_goalie = is_goalie
 
-    def handle_transition(self, context: RobotContext) -> Optional[Type[State[RobotContext]]]:
+    def handle_transition(self, context: RobotContext) -> Optional[type[State[RobotContext]]]:
         ball_dist = distance(context.ball.position, context.my_state.position)
 
         if ball_dist > APPROACH_TO_CHASE_DISTANCE:
@@ -233,7 +233,7 @@ class AligningWithTargetState(State[RobotContext]):
         self.role_area = role_area
         self.is_goalie = is_goalie
 
-    def handle_transition(self, context: RobotContext) -> Optional[Type[State[RobotContext]]]:
+    def handle_transition(self, context: RobotContext) -> Optional[type[State[RobotContext]]]:
         if not context.has_possession:
             self._enter_time = None
             return ApproachingBallState
@@ -333,7 +333,7 @@ class AligningWithTargetState(State[RobotContext]):
 class KickingState(State[RobotContext]):
     """Execute the kick."""
 
-    def handle_transition(self, context: RobotContext) -> Optional[Type[State[RobotContext]]]:
+    def handle_transition(self, context: RobotContext) -> Optional[type[State[RobotContext]]]:
         if not context.has_possession:
             return ChasingBallState
         return None
@@ -546,10 +546,8 @@ def calculate_receiver_position(
 
     if left_space > right_space:
         candidate = left_candidate
-        move_dir = perp_left
     else:
         candidate = right_candidate
-        move_dir = perp_right
 
     # Add separate center bias: pull toward center proportional to distance
     field_center = np.array([(field_x_min + field_x_max) / 2, (field_y_min + field_y_max) / 2])
@@ -597,7 +595,7 @@ class PositioningState(State[RobotContext]):
         self.role_area = role_area
         self.is_goalie = is_goalie
 
-    def handle_transition(self, context: RobotContext) -> Optional[Type[State[RobotContext]]]:
+    def handle_transition(self, context: RobotContext) -> Optional[type[State[RobotContext]]]:
         if should_intercept(
             context.ball.position, context.ball.velocity, context.my_state.position
         ):
@@ -731,7 +729,7 @@ class InterceptingState(State[RobotContext]):
         self.role_area = role_area
         self.is_goalie = is_goalie
 
-    def handle_transition(self, context: RobotContext) -> Optional[Type[State[RobotContext]]]:
+    def handle_transition(self, context: RobotContext) -> Optional[type[State[RobotContext]]]:
         # Calculate distance to the interception point on the trajectory
         interception_point = calculate_interception_point(
             context.ball.position, context.ball.velocity, context.my_state.position
@@ -757,7 +755,6 @@ class InterceptingState(State[RobotContext]):
     def execute(self, context: RobotContext, **kwargs: Any) -> None:
         sender: grSimSender = kwargs["sender"]
         movement = kwargs["movement"]
-        spawner: BallIdleSpawner = kwargs["spawner"]
 
         interception_point = calculate_interception_point(
             context.ball.position, context.ball.velocity, context.my_state.position
@@ -832,9 +829,6 @@ class StrikerPositioningState(PositioningState):
         sender = kwargs["sender"]
         movement = kwargs["movement"]
         spawner = kwargs["spawner"]
-
-        ball_xy = context.ball.position[:2]
-        robot_xy = context.my_state.position[:2]
 
         if not context.has_possession:
             return  # super().execute(context, **kwargs)
@@ -938,7 +932,7 @@ class AligningWithGoalState(State[RobotContext]):
         self.is_goalie = is_goalie
         self.force_center = force_center
 
-    def handle_transition(self, context: RobotContext) -> Optional[Type[State[RobotContext]]]:
+    def handle_transition(self, context: RobotContext) -> Optional[type[State[RobotContext]]]:
         if not context.has_possession:
             return ApproachingBallForShotState
 
@@ -995,7 +989,7 @@ class AligningWithGoalState(State[RobotContext]):
 class ShootingState(State[RobotContext]):
     """Execute shot at goal with maximum power."""
 
-    def handle_transition(self, context: RobotContext) -> Optional[Type[State[RobotContext]]]:
+    def handle_transition(self, context: RobotContext) -> Optional[type[State[RobotContext]]]:
         if not context.has_possession:
             return ChasingBallForShotState
         return None
@@ -1017,7 +1011,7 @@ class ChasingBallForShotState(State[RobotContext]):
         self.role_area = role_area
         self.is_goalie = is_goalie
 
-    def handle_transition(self, context: RobotContext) -> Optional[Type[State[RobotContext]]]:
+    def handle_transition(self, context: RobotContext) -> Optional[type[State[RobotContext]]]:
         ball_dist = distance(context.ball.position, context.my_state.position)
         if ball_dist < CHASE_TO_APPROACH_DISTANCE:
             return ApproachingBallForShotState
@@ -1072,7 +1066,7 @@ class ApproachingBallForShotState(State[RobotContext]):
         self.role_area = role_area
         self.is_goalie = is_goalie
 
-    def handle_transition(self, context: RobotContext) -> Optional[Type[State[RobotContext]]]:
+    def handle_transition(self, context: RobotContext) -> Optional[type[State[RobotContext]]]:
         ball_dist = distance(context.ball.position, context.my_state.position)
 
         if ball_dist > APPROACH_TO_CHASE_DISTANCE:

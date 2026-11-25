@@ -75,9 +75,6 @@ class Striker(Role):
         if phase == self.Phase.CHASING:
             return ChasingBallStateMachine(ROLE_AREA)
 
-        # if phase == self.Phase.HOLD:
-        # return HoldPositionFaceBallStateMachine(self.home)
-
         if phase == self.Phase.INTERCEPT:
             return InterceptionStateMachine(STRIKER_AREA)
 
