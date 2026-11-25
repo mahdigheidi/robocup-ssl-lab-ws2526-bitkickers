@@ -28,10 +28,7 @@ class FieldSection:
     ymax: float
 
     def contains(self, pos: np.ndarray) -> bool:
-        return (
-            self.xmin <= pos[0] <= self.xmax
-            and self.ymin <= pos[1] <= self.ymax
-        )
+        return self.xmin <= pos[0] <= self.xmax and self.ymin <= pos[1] <= self.ymax
 
 
 @dataclass
@@ -45,6 +42,7 @@ class StrategyConfig:
 # ============================================================
 # Base Strategy
 # ============================================================
+
 
 class BaseStrategy:
     def __init__(
@@ -180,10 +178,9 @@ class BaseStrategy:
     # Shooting
     # ========================================================
     def _has_clean_shot(self, robot_pos, world_state):
-        obstacles = (
-            world_state.get_opponents(is_yellow=self.is_yellow)
-            + [world_state.get_opponent_goalie(is_yellow=self.is_yellow)]
-        )
+        obstacles = world_state.get_opponents(is_yellow=self.is_yellow) + [
+            world_state.get_opponent_goalie(is_yellow=self.is_yellow)
+        ]
 
         for p in self.goal_points:
             if self._trajectory_clear(robot_pos[:2], p, obstacles):
@@ -211,9 +208,7 @@ class BaseStrategy:
             for o in world_state.get_opponents(is_yellow=self.is_yellow)
         )
 
-        return (
-            -1.0 * ego_dist - 0.5 * teammate_dist + 2.0 * opponent_dist
-        )
+        return -1.0 * ego_dist - 0.5 * teammate_dist + 2.0 * opponent_dist
 
     # ========================================================
     # Defensive pressure

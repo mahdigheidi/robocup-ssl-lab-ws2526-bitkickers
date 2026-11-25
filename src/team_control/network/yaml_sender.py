@@ -8,12 +8,12 @@ This module provides:
        using IP and port mappings specified in a YAML configuration file.
 
 Example YAML file (`ipconfig.yaml`):
-    "1": 
+    "1":
     ip: "127.0.0.0"
     port: 1234
     shell_number: 6
 
-    "2": 
+    "2":
     ip: "127.0.0.0"
     port: 1234
     shell_number: 7
@@ -40,7 +40,8 @@ try:
     from yaml import CLoader as Loader
 except ImportError as e:
     from yaml import Loader
-  
+
+
 class YamlSender(BaseSocket):
     """
     UDP command sender using YAML configuration.
@@ -72,9 +73,8 @@ class YamlSender(BaseSocket):
             raise ValueError(f"Error parsing YAML configuration: {e}") from e
 
         logging.info(f"Loaded robot configuration: {self.robot}")
-        
-    
-    def send_command(self, command_list:RobotCommand) -> None:
+
+    def send_command(self, command_list: RobotCommand) -> None:
         """
         Send a list of robot commands via UDP.
 
@@ -94,19 +94,19 @@ class YamlSender(BaseSocket):
 
             if robot_id not in self.robot:
                 raise KeyError(f"Robot ID {robot_id} not found in configuration.")
-            
+
             destination = self.robot[robot_id]["ip"]
             port = self.robot[robot_id]["port"]
 
-            encoded_command:bytes = command.encode()
+            encoded_command: bytes = command.encode()
             self.sock.sendto(encoded_command, (destination, port))
 
             logging.debug(f"Sent command to Robot {robot_id} -> {destination}:{port}")
 
         logging.info(f"Successfully sent {len(command_list)} commands.")
-            
 
-if __name__ == "__main__" :
+
+if __name__ == "__main__":
     # Example usage
     sender = YamlSender()
     commands = [RobotCommand(i) for i in range(1, 5)]

@@ -1,4 +1,5 @@
 """Shared ball handling state machines - reusable across roles."""
+
 import time
 from typing import Any, Optional, Type
 
@@ -55,11 +56,9 @@ SHOOTING_ALIGNMENT_THRESHOLD = 2  # radians (~2 degrees)
 SHOOTING_KICK_POWER = 10  # Maximum power
 
 
-
-#striker constraints
+# striker constraints
 STRIKER_X_LIMIT = 1600.0
 STRIKER_MARGIN = 120.0
-
 
 
 def distance(pos0: np.ndarray, pos1: np.ndarray) -> float:
@@ -74,6 +73,7 @@ def distance(pos0: np.ndarray, pos1: np.ndarray) -> float:
 
 class ChasingBallState(State[RobotContext]):
     """Fast approach to ball from distance."""
+
     def __init__(self, role_area: Optional[Any] = None, is_goalie: bool = False):
         self.role_area = role_area
         self.is_goalie = is_goalie
@@ -89,12 +89,15 @@ class ChasingBallState(State[RobotContext]):
         movement = kwargs["movement"]
 
         target_x, target_y = context.ball.position[:2]
-        
+
         # Avoid collision with other robots
         obstacles = list(context.opponents.values()) + list(context.teammates.values())
         target_x, target_y = avoid_collision_robust(
-            context.my_state.position[0], context.my_state.position[1], 
-            target_x, target_y, obstacles
+            context.my_state.position[0],
+            context.my_state.position[1],
+            target_x,
+            target_y,
+            obstacles,
         )
 
         if self.role_area is not None:
@@ -103,8 +106,9 @@ class ChasingBallState(State[RobotContext]):
             )
 
         # Prepare obstacles for movement
-        static_obs = [tuple(o.position[:2]) for o in context.opponents.values()] + \
-                     [tuple(t.position[:2]) for t in context.teammates.values()]
+        static_obs = [tuple(o.position[:2]) for o in context.opponents.values()] + [
+            tuple(t.position[:2]) for t in context.teammates.values()
+        ]
 
         vx, vy = movement.go_to(
             context.my_state.position,
@@ -122,6 +126,7 @@ class ChasingBallState(State[RobotContext]):
 
 class ApproachingBallState(State[RobotContext]):
     """Gentle approach when close to ball - prevents bumping."""
+
     def __init__(self, role_area: Optional[Any] = None, is_goalie: bool = False):
         self.role_area = role_area
         self.is_goalie = is_goalie
@@ -139,12 +144,15 @@ class ApproachingBallState(State[RobotContext]):
         movement = kwargs["movement"]
 
         target_x, target_y = context.ball.position[:2]
-        
+
         # Avoid collision with other robots
         obstacles = list(context.opponents.values()) + list(context.teammates.values())
         target_x, target_y = avoid_collision_robust(
-            context.my_state.position[0], context.my_state.position[1], 
-            target_x, target_y, obstacles
+            context.my_state.position[0],
+            context.my_state.position[1],
+            target_x,
+            target_y,
+            obstacles,
         )
 
         if self.role_area is not None:
@@ -153,8 +161,9 @@ class ApproachingBallState(State[RobotContext]):
             )
 
         # Prepare obstacles for movement
-        static_obs = [tuple(o.position[:2]) for o in context.opponents.values()] + \
-                     [tuple(t.position[:2]) for t in context.teammates.values()]
+        static_obs = [tuple(o.position[:2]) for o in context.opponents.values()] + [
+            tuple(t.position[:2]) for t in context.teammates.values()
+        ]
 
         vx, vy = movement.go_to(
             context.my_state.position,
@@ -164,7 +173,7 @@ class ApproachingBallState(State[RobotContext]):
             max_speed=APPROACH_MAX_SPEED,
             static_obstacles=static_obs,
         )
-        
+
         w = movement.face_towards(robot_pos=context.my_state.position, target=context.ball.position)
         sender.send_command(
             RobotCommand(robot_id=context.robot_id, vx=vx, vy=vy, w=w, kick=0, dribble=1)
@@ -194,11 +203,11 @@ def select_passing_target(context: RobotContext):
     """
     if not context.teammates:
         return None
-        
+
     if context.preferred_teammate is not None and context.preferred_teammate in context.teammates:
         return context.teammates[context.preferred_teammate]
 
-    # Most forward: 
+    # Most forward:
     # For Blue (playing right): max X
     # For Yellow (playing left): min X
     if context.is_yellow:
@@ -218,6 +227,7 @@ def find_teammate_with_ball(context: RobotContext) -> Optional[EntityState]:
 
 class AligningWithTargetState(State[RobotContext]):
     """Align with target to prepare for pass."""
+
     def __init__(self, role_area: Optional[Any] = None, is_goalie: bool = False):
         self._enter_time = None
         self.role_area = role_area
@@ -230,7 +240,7 @@ class AligningWithTargetState(State[RobotContext]):
 
         if self._enter_time is None:
             self._enter_time = time.time()
-            
+
         # If stuck in passing/aligning for too long, switch to shooting
         if time.time() - self._enter_time > 2.0:
             return AligningWithGoalState
@@ -239,7 +249,7 @@ class AligningWithTargetState(State[RobotContext]):
         target = select_passing_target(context)
         if target is None:
             return None
-            
+
         target_pos = target.position
 
         # Check if path is blocked by any opponent
@@ -271,7 +281,7 @@ class AligningWithTargetState(State[RobotContext]):
         target = select_passing_target(context)
         if target is None:
             return
-            
+
         target_pos = target.position
 
         # Check if path is blocked - if so, move sideways to get clear
@@ -296,8 +306,10 @@ class AligningWithTargetState(State[RobotContext]):
             if reposition_target is not None:
                 tx, ty = reposition_target[0], reposition_target[1]
                 if self.role_area is not None:
-                    tx, ty = self.role_area.project_to_legal_area(context, tx, ty, is_goalie=self.is_goalie)
-                
+                    tx, ty = self.role_area.project_to_legal_area(
+                        context, tx, ty, is_goalie=self.is_goalie
+                    )
+
                 obstacles = list(context.opponents.values()) + list(context.teammates.values())
                 static_obs = [tuple(o.position[:2]) for o in obstacles]
                 vx, vy = movement.go_to(
@@ -352,7 +364,9 @@ class PassingStateMachine(StateMachine[RobotContext]):
     def __init__(self, role_area: Optional[Any] = None, is_goalie: bool = False):
         aligning = AligningWithTargetState(role_area=role_area, is_goalie=is_goalie)
         kicking = KickingState()
-        approaching = ApproachingBallState(role_area=role_area, is_goalie=is_goalie)  # Fallback if possession lost
+        approaching = ApproachingBallState(
+            role_area=role_area, is_goalie=is_goalie
+        )  # Fallback if possession lost
         chasing = ChasingBallState(role_area=role_area, is_goalie=is_goalie)  # Fallback if ball far
         align_goal = AligningWithGoalState()
         shooting = ShootingState()
@@ -460,6 +474,7 @@ def is_path_blocked(
 
     return perp_distance < SHADOW_WIDTH
 
+
 def is_path_clear(
     passer_pos: np.ndarray,
     receiver_pos: np.ndarray,
@@ -472,6 +487,7 @@ def is_path_clear(
         if is_path_blocked(passer_pos, receiver_pos, opp.position):
             return False
     return True
+
 
 def calculate_receiver_position(
     receiver_pos: np.ndarray,
@@ -552,7 +568,7 @@ def calculate_receiver_position(
     # Add separation bias: push away from passer if too close
     to_passer = passer_pos[:2] - receiver_pos[:2]
     dist_to_passer = np.linalg.norm(to_passer)
-    
+
     if dist_to_passer < MIN_SEPARATION_DISTANCE and dist_to_passer > 100:
         # Push away from passer, stronger when closer
         away_from_passer = -to_passer / dist_to_passer
@@ -576,6 +592,7 @@ def calculate_receiver_position(
 
 class PositioningState(State[RobotContext]):
     """Position to receive pass."""
+
     def __init__(self, role_area: Optional[Any] = None, is_goalie: bool = False):
         self.role_area = role_area
         self.is_goalie = is_goalie
@@ -602,7 +619,7 @@ class PositioningState(State[RobotContext]):
 
         if passer_state is None:
             return
-            
+
         passer_pos = passer_state.position
 
         ball_speed = np.linalg.norm(context.ball.velocity)
@@ -624,24 +641,32 @@ class PositioningState(State[RobotContext]):
                         context.ball.position, context.ball.velocity, context.my_state.position
                     )
                     tx, ty = target_pos[0], target_pos[1]
-                    
+
                     # Avoid collision with other robots
                     obstacles = list(context.opponents.values()) + list(context.teammates.values())
                     tx, ty = avoid_collision_robust(
-                        context.my_state.position[0], context.my_state.position[1], 
-                        tx, ty, obstacles
+                        context.my_state.position[0],
+                        context.my_state.position[1],
+                        tx,
+                        ty,
+                        obstacles,
                     )
 
                     if self.role_area is not None:
-                        tx, ty = self.role_area.project_to_legal_area(context, tx, ty, is_goalie=self.is_goalie)
+                        tx, ty = self.role_area.project_to_legal_area(
+                            context, tx, ty, is_goalie=self.is_goalie
+                        )
 
                     # Prepare obstacles for movement
-                    static_obs = [tuple(o.position[:2]) for o in context.opponents.values()] + \
-                                 [tuple(t.position[:2]) for t in context.teammates.values()]
+                    static_obs = [tuple(o.position[:2]) for o in context.opponents.values()] + [
+                        tuple(t.position[:2]) for t in context.teammates.values()
+                    ]
 
                     vx, vy = movement.go_to(
-                        context.my_state.position, (tx, ty), kicker_to_target=True,
-                        static_obstacles=static_obs
+                        context.my_state.position,
+                        (tx, ty),
+                        kicker_to_target=True,
+                        static_obstacles=static_obs,
                     )
                     w = movement.face_towards(context.my_state.position, context.ball.position)
                     sender.send_command(
@@ -673,15 +698,20 @@ class PositioningState(State[RobotContext]):
         if target_pos is not None:
             tx, ty = target_pos[0], target_pos[1]
             if self.role_area is not None:
-                tx, ty = self.role_area.project_to_legal_area(context, tx, ty, is_goalie=self.is_goalie)
+                tx, ty = self.role_area.project_to_legal_area(
+                    context, tx, ty, is_goalie=self.is_goalie
+                )
             # Prepare obstacles for movement
-            static_obs = [tuple(o.position[:2]) for o in context.opponents.values()] + \
-                         [tuple(t.position[:2]) for t in context.teammates.values()]
+            static_obs = [tuple(o.position[:2]) for o in context.opponents.values()] + [
+                tuple(t.position[:2]) for t in context.teammates.values()
+            ]
 
             # Need to move to get clear
             vx, vy = movement.go_to(
-                context.my_state.position, (tx, ty), max_speed=REPOSITION_MAX_SPEED,
-                static_obstacles=static_obs
+                context.my_state.position,
+                (tx, ty),
+                max_speed=REPOSITION_MAX_SPEED,
+                static_obstacles=static_obs,
             )
         else:
             # Already in good position, stay still
@@ -694,10 +724,9 @@ class PositioningState(State[RobotContext]):
         )
 
 
-
-
 class InterceptingState(State[RobotContext]):
     """Intercept incoming ball."""
+
     def __init__(self, role_area: Optional[Any] = None, is_goalie: bool = False):
         self.role_area = role_area
         self.is_goalie = is_goalie
@@ -735,20 +764,20 @@ class InterceptingState(State[RobotContext]):
         )
 
         tx, ty = interception_point[0], interception_point[1]
-        
+
         # Avoid collision with other robots
         obstacles = list(context.opponents.values()) + list(context.teammates.values())
         tx, ty = avoid_collision_robust(
-            context.my_state.position[0], context.my_state.position[1], 
-            tx, ty, obstacles
+            context.my_state.position[0], context.my_state.position[1], tx, ty, obstacles
         )
 
         if self.role_area is not None:
             tx, ty = self.role_area.project_to_legal_area(context, tx, ty, is_goalie=self.is_goalie)
 
         # Prepare obstacles for movement
-        static_obs = [tuple(o.position[:2]) for o in context.opponents.values()] + \
-                     [tuple(t.position[:2]) for t in context.teammates.values()]
+        static_obs = [tuple(o.position[:2]) for o in context.opponents.values()] + [
+            tuple(t.position[:2]) for t in context.teammates.values()
+        ]
 
         vx, vy = movement.go_to(
             context.my_state.position,
@@ -762,6 +791,7 @@ class InterceptingState(State[RobotContext]):
         sender.send_command(
             RobotCommand(robot_id=context.robot_id, vx=vx, vy=vy, w=w, kick=0, dribble=1)
         )
+
 
 def pick_open_goal(
     context: RobotContext,
@@ -782,7 +812,7 @@ def pick_open_goal(
 
     reposition = calculate_receiver_position(
         receiver_pos=ball_xy,
-        passer_pos=goal_target,        # ← goal acts like "passer"
+        passer_pos=goal_target,  # ← goal acts like "passer"
         opponent_state=opponent,
         field_x_min=spawner.field_x_min,
         field_x_max=spawner.field_x_max,
@@ -797,7 +827,6 @@ def pick_open_goal(
     return None, reposition
 
 
-
 class StrikerPositioningState(PositioningState):
     def execute(self, context: RobotContext, **kwargs):
         sender = kwargs["sender"]
@@ -808,7 +837,7 @@ class StrikerPositioningState(PositioningState):
         robot_xy = context.my_state.position[:2]
 
         if not context.has_possession:
-            return #super().execute(context, **kwargs)
+            return  # super().execute(context, **kwargs)
 
         # -------- STRIKER SHOOT DECISION --------
         goal_target, reposition = pick_open_goal(context, spawner)
@@ -816,8 +845,9 @@ class StrikerPositioningState(PositioningState):
         # BLOCKED → reposition laterally
         if goal_target is None:
             # Prepare obstacles for movement
-            static_obs = [tuple(o.position[:2]) for o in context.opponents.values()] + \
-                         [tuple(t.position[:2]) for t in context.teammates.values()]
+            static_obs = [tuple(o.position[:2]) for o in context.opponents.values()] + [
+                tuple(t.position[:2]) for t in context.teammates.values()
+            ]
 
             vx, vy = movement.go_to(
                 context.my_state.position,
@@ -825,21 +855,13 @@ class StrikerPositioningState(PositioningState):
                 max_speed=1500,
                 static_obstacles=static_obs,
             )
-        
+
             w = movement.face_towards(context.my_state.position, reposition)
-            sender.send_command(
-                RobotCommand(
-                    context.robot_id,
-                    vx, vy, w,
-                    kick=0, dribble=1
-                )
-            )
+            sender.send_command(RobotCommand(context.robot_id, vx, vy, w, kick=0, dribble=1))
             return
 
         # CLEAR → let Aligning/Kicking handle the shot
         return super().execute(context, **kwargs)
-
-
 
 
 class ReceivingStateMachine(StateMachine[RobotContext]):
@@ -851,6 +873,7 @@ class ReceivingStateMachine(StateMachine[RobotContext]):
 
         super().__init__(initial_state=positioning)
         self.register_state(intercepting)
+
 
 class StrikerStateMachine(StateMachine):
     def __init__(self, role_area: Optional[Any] = None):
@@ -868,44 +891,49 @@ class StrikerStateMachine(StateMachine):
 # =============================================================================
 
 
-def find_goal_target(context: RobotContext, spawner: BallIdleSpawner, force_center: bool = False) -> np.ndarray:
+def find_goal_target(
+    context: RobotContext, spawner: BallIdleSpawner, force_center: bool = False
+) -> np.ndarray:
     """Find best target point in opponent's goal (searching for open lanes)."""
     goal_x = -spawner.goal_line_x if context.is_yellow else spawner.goal_line_x
-    
+
     if force_center:
         return np.array([goal_x, 0.0])
-    
+
     # Range of y in goal area: -400 to 400
     y_points = np.linspace(-400, 400, 59)
-    
+
     ball_xy = context.ball.position[:2]
     opponents = list(context.opponents.values())
-    
+
     mid_idx = len(y_points) // 2
     indices = [mid_idx]
     for i in range(1, mid_idx + 1):
         indices.append(mid_idx + i)
         indices.append(mid_idx - i)
-        
+
     for idx in indices:
         y = y_points[idx]
         target = np.array([goal_x, y])
-        
+
         blocked = False
         for op in opponents:
             if is_path_blocked(ball_xy, target, op.position):
                 blocked = True
                 break
-        
+
         if not blocked:
             return target
-            
+
     return np.array([goal_x, 0.0])
 
 
 class AligningWithGoalState(State[RobotContext]):
     """Align with goal to prepare for shot."""
-    def __init__(self, role_area: Optional[Any] = None, is_goalie: bool = False, force_center: bool = False):
+
+    def __init__(
+        self, role_area: Optional[Any] = None, is_goalie: bool = False, force_center: bool = False
+    ):
         self.role_area = role_area
         self.is_goalie = is_goalie
         self.force_center = force_center
@@ -917,7 +945,7 @@ class AligningWithGoalState(State[RobotContext]):
         # Get goal target
         # Note: spawner is not available in handle_transition, so we use a simpler check
         goal_x = -4500 if context.is_yellow else 4500  # Approximate goal line
-        
+
         my_orientation = context.my_state.position[2]
         dx = goal_x - context.my_state.position[0]
         dy = 0 - context.my_state.position[1]  # Aim at center for transition check
@@ -949,12 +977,15 @@ class AligningWithGoalState(State[RobotContext]):
         vx, vy = 0.0, 0.0
         if self.role_area is not None:
             target = self.role_area.project_to_legal_area(context, rx, ry, is_goalie=self.is_goalie)
-            
-            # Prepare obstacles for movement
-            static_obs = [tuple(o.position[:2]) for o in context.opponents.values()] + \
-                         [tuple(t.position[:2]) for t in context.teammates.values()]
 
-            vx, vy = movement.go_to(context.my_state.position, target, max_speed=500, static_obstacles=static_obs)
+            # Prepare obstacles for movement
+            static_obs = [tuple(o.position[:2]) for o in context.opponents.values()] + [
+                tuple(t.position[:2]) for t in context.teammates.values()
+            ]
+
+            vx, vy = movement.go_to(
+                context.my_state.position, target, max_speed=500, static_obstacles=static_obs
+            )
 
         sender.send_command(
             RobotCommand(robot_id=context.robot_id, vx=vx, vy=vy, w=w, kick=0, dribble=1)
@@ -974,16 +1005,14 @@ class ShootingState(State[RobotContext]):
 
         sender.send_command(
             RobotCommand(
-                robot_id=context.robot_id,
-                vx=0, vy=0, w=0,
-                kick=SHOOTING_KICK_POWER,
-                dribble=0
+                robot_id=context.robot_id, vx=0, vy=0, w=0, kick=SHOOTING_KICK_POWER, dribble=0
             )
         )
 
 
 class ChasingBallForShotState(State[RobotContext]):
     """Fast approach to ball for shooting."""
+
     def __init__(self, role_area: Optional[Any] = None, is_goalie: bool = False):
         self.role_area = role_area
         self.is_goalie = is_goalie
@@ -1001,12 +1030,15 @@ class ChasingBallForShotState(State[RobotContext]):
         movement = kwargs["movement"]
 
         target_x, target_y = context.ball.position[:2]
-        
+
         # Avoid collision with other robots
         obstacles = list(context.opponents.values()) + list(context.teammates.values())
         target_x, target_y = avoid_collision_robust(
-            context.my_state.position[0], context.my_state.position[1], 
-            target_x, target_y, obstacles
+            context.my_state.position[0],
+            context.my_state.position[1],
+            target_x,
+            target_y,
+            obstacles,
         )
 
         if self.role_area is not None:
@@ -1015,8 +1047,9 @@ class ChasingBallForShotState(State[RobotContext]):
             )
 
         # Prepare obstacles for movement
-        static_obs = [tuple(o.position[:2]) for o in context.opponents.values()] + \
-                     [tuple(t.position[:2]) for t in context.teammates.values()]
+        static_obs = [tuple(o.position[:2]) for o in context.opponents.values()] + [
+            tuple(t.position[:2]) for t in context.teammates.values()
+        ]
 
         vx, vy = movement.go_to(
             context.my_state.position,
@@ -1034,6 +1067,7 @@ class ChasingBallForShotState(State[RobotContext]):
 
 class ApproachingBallForShotState(State[RobotContext]):
     """Gentle approach when close to ball for shooting."""
+
     def __init__(self, role_area: Optional[Any] = None, is_goalie: bool = False):
         self.role_area = role_area
         self.is_goalie = is_goalie
@@ -1052,12 +1086,15 @@ class ApproachingBallForShotState(State[RobotContext]):
         movement = kwargs["movement"]
 
         target_x, target_y = context.ball.position[:2]
-        
+
         # Avoid collision with other robots
         obstacles = list(context.opponents.values()) + list(context.teammates.values())
         target_x, target_y = avoid_collision_robust(
-            context.my_state.position[0], context.my_state.position[1], 
-            target_x, target_y, obstacles
+            context.my_state.position[0],
+            context.my_state.position[1],
+            target_x,
+            target_y,
+            obstacles,
         )
 
         if self.role_area is not None:
@@ -1066,8 +1103,9 @@ class ApproachingBallForShotState(State[RobotContext]):
             )
 
         # Prepare obstacles for movement
-        static_obs = [tuple(o.position[:2]) for o in context.opponents.values()] + \
-                     [tuple(t.position[:2]) for t in context.teammates.values()]
+        static_obs = [tuple(o.position[:2]) for o in context.opponents.values()] + [
+            tuple(t.position[:2]) for t in context.teammates.values()
+        ]
 
         vx, vy = movement.go_to(
             context.my_state.position,
@@ -1086,14 +1124,17 @@ class ApproachingBallForShotState(State[RobotContext]):
 class ShootingStateMachine(StateMachine[RobotContext]):
     """State machine for shooting at goal."""
 
-    def __init__(self, role_area: Optional[Any] = None, is_goalie: bool = False, force_center: bool = False):
+    def __init__(
+        self, role_area: Optional[Any] = None, is_goalie: bool = False, force_center: bool = False
+    ):
         chasing = ChasingBallForShotState(role_area=role_area, is_goalie=is_goalie)
         approaching = ApproachingBallForShotState(role_area=role_area, is_goalie=is_goalie)
-        aligning = AligningWithGoalState(role_area=role_area, is_goalie=is_goalie, force_center=force_center)
+        aligning = AligningWithGoalState(
+            role_area=role_area, is_goalie=is_goalie, force_center=force_center
+        )
         shooting = ShootingState()
 
         super().__init__(initial_state=aligning)
         self.register_state(chasing)
         self.register_state(approaching)
         self.register_state(shooting)
-    

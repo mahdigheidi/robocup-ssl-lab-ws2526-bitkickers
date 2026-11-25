@@ -1,7 +1,7 @@
-
 """
 The following is obtained from gc_referee_message.proto
 """
+
 from enum import Enum
 
 import numpy as np
@@ -12,7 +12,7 @@ class Command(Enum):
     STOP = 1
     NORMAL_START = 2
     FORCE_START = 3
-    
+
     PREPARE_KICKOFF_YELLOW = 4
     PREPARE_KICKOFF_BLUE = 5
     PREPARE_PENALTY_YELLOW = 6
@@ -21,7 +21,7 @@ class Command(Enum):
     DIRECT_FREE_BLUE = 9
     INDIRECT_FREE_YELLOW = 10
     INDIRECT_FREE_BLUE = 11
-    
+
     TIMEOUT_YELLOW = 12
     TIMEOUT_BLUE = 13
     GOAL_YELLOW = 14
@@ -29,11 +29,13 @@ class Command(Enum):
     BALL_PLACEMENT_YELLOW = 16
     BALL_PLACEMENT_BLUE = 17
 
+
 class Team(Enum):
     UNKNOWN = 0
     YELLOW = 1
     BLUE = 2
-    
+
+
 class GameEventType(Enum):
     UNKNOWN_GAME_EVENT_TYPE = 0
 
@@ -83,6 +85,7 @@ class GameEventType(Enum):
     UNSPORTING_BEHAVIOR_MAJOR = 36
     UNSPORTING_BEHAVIOR_MINOR = 35
 
+
 class Stage(Enum):
     NORMAL_FIRST_HALF_PRE = 0
     NORMAL_FIRST_HALF = 1
@@ -99,26 +102,27 @@ class Stage(Enum):
     PENALTY_SHOOTOUT = 12
     POST_GAME = 13
 
+
 class MatchType(Enum):
     UNKNOWN_MATCH = 0
     GROUP_PHASE = 1
     ELIMINATION_PHASE = 2
     FRIENDLY = 3
-    
-class Point:
-    def __init__(self,point):
-        # required
-       self.x = float(point.x)
-       self.y = float(point.y)
-       self.vector = np.array([self.x, self.y])
-       
 
-def has_proto_field(obj, field_name:str):
+
+class Point:
+    def __init__(self, point):
+        # required
+        self.x = float(point.x)
+        self.y = float(point.y)
+        self.vector = np.array([self.x, self.y])
+
+
+def has_proto_field(obj, field_name: str):
     try:
         return obj.HasField(field_name)
     except ValueError:
         return False
-    
 
     # def match_event(self,game_event):
     #     ## access the corresponding event attribute
@@ -134,7 +138,7 @@ def has_proto_field(obj, field_name:str):
     #             return self.ball_left_field(event)
     #         case GameEventType.AIMLESS_KICK:
     #             return self.aimless_kick(event)
-            
+
     #         #Stopping Fouls
     #         case GameEventType.ATTACKER_TOO_CLOSE_TO_DEFENSE_AREA:
     #             return self.attacker_touched_ball_in_defense_area(event)
@@ -155,7 +159,7 @@ def has_proto_field(obj, field_name:str):
     #             return self.bot_tipped_over(event)
     #         case GameEventType.BOT_DROPPED_PARTS:
     #             return self.bot_dropped_parts(event)
-            
+
     #         # non stopping fouls
     #         case GameEventType.ATTACKER_TOUCHED_BALL_IN_DEFENSE_AREA:
     #             return self.attacker_too_close_to_defense_area(event)
@@ -165,7 +169,7 @@ def has_proto_field(obj, field_name:str):
     #             return self.bot_crash_unique(event)
     #         case GameEventType.BOT_CRASH_DRAWN:
     #             return self.bot_crash_drawn(event)
-            
+
     #         # fouls while ball out of play
     #         case GameEventType.DEFENDER_TOO_CLOSE_TO_KICK_POINT:
     #             return self.defender_too_close_to_kick_point(event)
@@ -173,7 +177,7 @@ def has_proto_field(obj, field_name:str):
     #             return self.bot_too_fast_in_stop(event)
     #         case GameEventType.BOT_INTERFERED_PLACEMENT:
     #             return self.bot_interfered_placement(event)
-            
+
     #         # Scoring Goals
     #         case GameEventType.POSSIBLE_GOAL:
     #             return self.goal(event)
@@ -181,7 +185,7 @@ def has_proto_field(obj, field_name:str):
     #             return self.goal(event)
     #         case GameEventType.INVALID_GOAL:
     #             return self.goal(event)
-            
+
     #         # Other Events
     #         case GameEventType.ATTACKER_DOUBLE_TOUCHED_BALL:
     #             return self.attacker_double_touched_ball(event)
@@ -189,7 +193,7 @@ def has_proto_field(obj, field_name:str):
     #             return self.placement_succeeded
     #         case GameEventType.PENALTY_KICK_FAILED:
     #             return self.penalty_kick_failed(event)
-            
+
     #         case GameEventType.NO_PROGRESS_IN_GAME:
     #             return self.no_progress_in_game(event)
     #         case GameEventType.PLACEMENT_FAILED:
@@ -210,7 +214,7 @@ def has_proto_field(obj, field_name:str):
     #             return self.challenge_flag_handled(event)
     #         case GameEventType.EMERGENCY_STOP:
     #             return self.emergency_stop(event)
-            
+
     #         case GameEventType.UNSPORTING_BEHAVIOR_MINOR:
     #             return self.unsporting_behavior_minor(event)
     #         case GameEventType.UNSPORTING_BEHAVIOR_MAJOR:

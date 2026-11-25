@@ -8,5 +8,6 @@ def test_vision_initialization():
     data = vision.listen()
     # assert data is not None
     print(data)
-    
+
+
 test_vision_initialization()

@@ -25,7 +25,7 @@ DEFENDER_AREA = RoleArea(
     x_max=4500.0,
     y_min=-2900.0,
     y_max=2900.0,
-    defense_x=3450.0,      # goal box edge
+    defense_x=3450.0,  # goal box edge
     defense_y_half=1050.0,
 )
 ROLE_AREA = DEFENDER_AREA
@@ -33,18 +33,15 @@ ROLE_AREA = DEFENDER_AREA
 logger = logging.getLogger(__name__)
 
 
-
-
 class Defender(Role):
     class Phase(Enum):
-        CHASING = auto()       # Get free ball
+        CHASING = auto()  # Get free ball
         INTERCEPTING = auto()  # Pressure opponent
-        BLOCKING = auto()      # Stay between opponent and goal
-        PASSING = auto()       # Pass to teammate
+        BLOCKING = auto()  # Stay between opponent and goal
+        PASSING = auto()  # Pass to teammate
         CLEARING = auto()  # Shoot upfield
-        RECEIVING = auto()     # Receive pass
-        SHADOW = auto()      # Shadow ball outside area
- 
+        RECEIVING = auto()  # Receive pass
+        SHADOW = auto()  # Shadow ball outside area
 
     def __init__(self, home=(2200.0, -1000.0)):
         super().__init__()
@@ -65,10 +62,10 @@ class Defender(Role):
             return PassingStateMachine(ROLE_AREA)
         elif phase == Defender.Phase.CLEARING:
             return ShootingStateMachine(ROLE_AREA)
-        
+
         elif phase == Defender.Phase.RECEIVING:
             return ReceivingStateMachine(ROLE_AREA)
-        
+
         elif phase == Defender.Phase.SHADOW:
             return ShadowBallStateMachine(ROLE_AREA)
 
@@ -87,12 +84,12 @@ class Defender(Role):
         if is_near_ball:
             if self._possession_start is None:
                 self._possession_start = time.time()
-            
+
             # Check for ANY teammate also near the ball
             conflicting_teammates = []
             for t_id, t in context.teammates.items():
                 t_dist = np.linalg.norm(t.position[:2] - context.ball.position[:2])
-                if t_dist < 200.0: # teammate is also near/contesting
+                if t_dist < 200.0:  # teammate is also near/contesting
                     conflicting_teammates.append(t_id)
 
             if conflicting_teammates:
@@ -130,14 +127,13 @@ class Defender(Role):
         # 2) Teammate has the ball → RECEIVE/INTERCEPT
         # --------------------------------------------------
         teammate_has_ball = any(
-            check_possession(context.ball.position, t.position)
-            for t in context.teammates.values()
+            check_possession(context.ball.position, t.position) for t in context.teammates.values()
         )
         if teammate_has_ball:
             # Switch to INTERCEPTING if teammate has ball, to block lanes
             # Or RECEIVING if we are waiting for a pass
             if robot.current_phase != self.Phase.INTERCEPTING:
-                #logger.info("Defender: teammate has ball → INTERCEPTING")
+                # logger.info("Defender: teammate has ball → INTERCEPTING")
                 robot.switch_phase(self.Phase.INTERCEPTING)
             return
 
@@ -145,8 +141,7 @@ class Defender(Role):
         # 3) Opponent has the ball OR fast ball → INTERCEPT
         # --------------------------------------------------
         opponent_has_ball = any(
-            check_possession(context.ball.position, t.position)
-            for t in context.opponents.values()
+            check_possession(context.ball.position, t.position) for t in context.opponents.values()
         )
 
         if opponent_has_ball:
@@ -174,16 +169,16 @@ class Defender(Role):
                 if t_dist < my_dist or (abs(t_dist - my_dist) < 2.0 and t_id < context.robot_id):
                     closest = False
                     break
-            
+
             if closest:
                 if robot.current_phase != self.Phase.CHASING:
-                    #logger.info("Defender: ball free in zone and closest → CHASING")
+                    # logger.info("Defender: ball free in zone and closest → CHASING")
                     robot.switch_phase(self.Phase.CHASING)
                 return
             else:
                 # If not closest, INTERCEPT/BLOCK instead of CHASING
                 if robot.current_phase != self.Phase.INTERCEPTING:
-                    #logger.info("Defender: ball free but teammate closer → INTERCEPTING")
+                    # logger.info("Defender: ball free but teammate closer → INTERCEPTING")
                     robot.switch_phase(self.Phase.INTERCEPTING)
                 return
 
@@ -191,7 +186,7 @@ class Defender(Role):
         # 5) Ball outside zone → SHADOW
         # --------------------------------------------------
         if robot.current_phase != self.Phase.SHADOW:
-            #logger.info("Defender: ball outside zone → SHADOW")
+            # logger.info("Defender: ball outside zone → SHADOW")
             robot.switch_phase(self.Phase.SHADOW)
 
 
@@ -207,11 +202,11 @@ def select_best_pass_target(context: RobotContext) -> int | None:
 
     for tid, teammate in context.teammates.items():
         dist = np.linalg.norm(teammate.position[:2] - my_pos)
-        
+
         # Avoid passing to robots too close (within 1000mm) or too far (> 4000mm)
         if dist < 400.0:
             continue
-            
+
         if dist > max_dist:
             max_dist = dist
             best_tid = tid

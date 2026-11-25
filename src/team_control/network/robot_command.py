@@ -29,7 +29,16 @@ class RobotCommand:
         time_set (float): Timestamp when this RobotCommand object was instantiated.
     """
 
-    def __init__(self, robot_id : int, vx : float=0.0, vy: float=0.0, w : float=0.0, kick : int=0, dribble : int=0, time_origin : float= 0.0):
+    def __init__(
+        self,
+        robot_id: int,
+        vx: float = 0.0,
+        vy: float = 0.0,
+        w: float = 0.0,
+        kick: int = 0,
+        dribble: int = 0,
+        time_origin: float = 0.0,
+    ):
         """
         Initialize a RobotCommand object.
 
@@ -53,7 +62,7 @@ class RobotCommand:
         self.kick: int = int(kick)
         self.dribble: int = int(dribble)
         self.time_origin: float = float(time_origin)
-    
+
     def __str__(self) -> str:
         """
         Convert the RobotCommand to a string.
@@ -70,14 +79,14 @@ class RobotCommand:
         Returns:
             str: Multiline string for debugging.
         """
-        return f'''
-            Robot Command: 
+        return f"""
+            Robot Command:
             {self.time_set=} , {self.time_origin=} : {self.robot_id=}
             Velocity : {self.vx=} , {self.vy=}, {self.w=}
             Kick? : {self.kick=}
             Dribble? : {self.dribble=}
-            '''
-                
+            """
+
     def encode(self) -> bytes:
         """
         Encode the RobotCommand into bytes for UDP transmission.
@@ -86,11 +95,11 @@ class RobotCommand:
             bytes: UTF-8 encoded byte string of the RobotCommand.
         """
 
-        self.encoded = bytes(str(self).encode('utf-8'))
+        self.encoded = bytes(str(self).encode("utf-8"))
         return self.encoded
-    
+
     @classmethod
-    def decode(cls,command_msg:str|bytes) -> object:
+    def decode(cls, command_msg: str | bytes) -> object:
         """
         Decode a received command string or bytes into a RobotCommand object.
 
@@ -109,15 +118,16 @@ class RobotCommand:
             robot_id, vx, vy, w, kick, dribble, time_origin = command_msg.split(" ")
         except ValueError as e:
             raise ValueError(f"Invalid command format: {command_msg}") from e
-        
+
         # Convert string arguments to appropriate types
         args = [
-            int(robot_id), 
+            int(robot_id),
             float(vx),
             float(vy),
             float(w),
             int(kick),
             int(dribble),
-            float(time_origin)]
-        
-        return RobotCommand(*args) 
+            float(time_origin),
+        ]
+
+        return RobotCommand(*args)

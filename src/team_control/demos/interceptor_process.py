@@ -26,29 +26,25 @@ from team_control.network.robot_command import RobotCommand
 from team_control.network.ssl_sockets import grSimSender
 from team_control.sim.spawn_robot import send_robot_to_grsim
 
-SAFE_DISTANCE = 600.0          
-KICK_POWER = 5               
+SAFE_DISTANCE = 600.0
+KICK_POWER = 5
 
-CAPTURE_NEAR_DIST = 400.0      
-CAPTURE_HOLD_DIST = 105.0     
+CAPTURE_NEAR_DIST = 400.0
+CAPTURE_HOLD_DIST = 105.0
 
-DT = 0.016                  
-STEPS = 30              
+DT = 0.016
+STEPS = 30
 
-BALL_SPEED_THRESHOLD = 500.0   
+BALL_SPEED_THRESHOLD = 500.0
 
-MAX_SPEED = 3000.0             
-MAX_ACCEL = 1700.0           
+MAX_SPEED = 3000.0
+MAX_ACCEL = 1700.0
 
-GOAL_X = 4500                
-GOAL_Y = 0.0            
-
-
+GOAL_X = 4500
+GOAL_Y = 0.0
 
 
-def time_to_reach(d_mm: float,
-                  v_max: float = MAX_SPEED,
-                  a_max: float = MAX_ACCEL) -> float:
+def time_to_reach(d_mm: float, v_max: float = MAX_SPEED, a_max: float = MAX_ACCEL) -> float:
     """
     Analytic time estimate for the robot to reach a target distance.
 
@@ -66,15 +62,12 @@ def time_to_reach(d_mm: float,
     d_switch = (v_max * v_max) / a_max
 
     if d_mm <= d_switch:
-      
         return 2.0 * math.sqrt(d_mm / a_max)
     else:
- 
         return (d_mm / v_max) + (v_max / a_max)
 
 
-def safe_target(tx: float, ty: float,
-                rx: float, ry: float) -> tuple[float, float]:
+def safe_target(tx: float, ty: float, rx: float, ry: float) -> tuple[float, float]:
     if not is_in_field((tx, ty)):
         return rx, ry
     if point_in_defense_area((tx, ty)):
@@ -82,18 +75,14 @@ def safe_target(tx: float, ty: float,
     return tx, ty
 
 
-def is_safe_from_robots(tx: float, ty: float,
-                        robots: list,
-                        margin: float = 200.0) -> bool:
+def is_safe_from_robots(tx: float, ty: float, robots: list, margin: float = 200.0) -> bool:
     for r in robots:
         if distance((tx, ty), r[:2]) < COLLISION_DISTANCE + margin:
             return False
     return True
 
 
-def avoid_collision(rx: float, ry: float,
-                    tx: float, ty: float,
-                    y0, y1) -> tuple[float, float]:
+def avoid_collision(rx: float, ry: float, tx: float, ty: float, y0, y1) -> tuple[float, float]:
     for y in (y0, y1):
         d = math.hypot(tx - y[0], ty - y[1])
         if 5.0 < d < SAFE_DISTANCE:
@@ -105,8 +94,7 @@ def avoid_collision(rx: float, ry: float,
     return tx, ty
 
 
-def block_pass_point(passer, receiver,
-                     offset: float = 20.0) -> tuple[float, float]:
+def block_pass_point(passer, receiver, offset: float = 20.0) -> tuple[float, float]:
     """
     Compute a blocking point perpendicular to the pass line.
 
@@ -140,15 +128,16 @@ def block_pass_point(passer, receiver,
 # MAIN CONTROL LOOP
 # =====================================================
 
-def interceptor_process(wm):
-    """ 
-    The robot: 
-    - Captures and shoots when ball is free. 
-    - Blocks when opponents have possession. 
-    - Intercepts fast moving balls using trajectory prediction. 
 
-    Args: 
-        wm: World model interface providing vision frames. 
+def interceptor_process(wm):
+    """
+    The robot:
+    - Captures and shoots when ball is free.
+    - Blocks when opponents have possession.
+    - Intercepts fast moving balls using trajectory prediction.
+
+    Args:
+        wm: World model interface providing vision frames.
     """
     sender = grSimSender("127.0.0.1", 20011, is_yellow=False)
     world_state = WorldState()
@@ -163,7 +152,7 @@ def interceptor_process(wm):
         cmd = RobotCommand(0, 0, 0, 0)
 
         # World state update
-   
+
         frame = wm.get_latest_frame()
         if frame is None or frame.ball is None:
             sender.send_command(cmd)
@@ -191,8 +180,7 @@ def interceptor_process(wm):
 
         # Possession check
         yellow_has_possession = any(
-            np.linalg.norm(op.position[:2] - np.array([ball_x, ball_y]))
-            < POSSESSION_THRESHOLD
+            np.linalg.norm(op.position[:2] - np.array([ball_x, ball_y])) < POSSESSION_THRESHOLD
             for op in ctx.opponents.values()
         )
 
@@ -209,7 +197,6 @@ def interceptor_process(wm):
         # 1. FREE BALL -> CAPTURE & SHOOT
         # =================================================
         if not yellow_has_possession and dist_to_ball < CAPTURE_NEAR_DIST:
-
             if dist_to_ball > CAPTURE_HOLD_DIST:
                 tx, ty = safe_target(ball_x, ball_y, rx, ry)
                 vx, vy = movement.go_to(
@@ -224,14 +211,10 @@ def interceptor_process(wm):
                 if kick_angle is None:
                     kick_angle = math.atan2(GOAL_Y - ry, GOAL_X - rx)
 
-                angle_error = (
-                    (kick_angle - rtheta + math.pi) % (2 * math.pi)
-                ) - math.pi
+                angle_error = ((kick_angle - rtheta + math.pi) % (2 * math.pi)) - math.pi
 
                 if abs(angle_error) > 0.5:
-                    cmd = RobotCommand(
-                        0, 0, 0, 6.0 * angle_error, dribble=1
-                    )
+                    cmd = RobotCommand(0, 0, 0, 6.0 * angle_error, dribble=1)
                 else:
                     cmd = RobotCommand(0, 0, 0, 0, kick=KICK_POWER)
                     kick_angle = None
@@ -272,9 +255,7 @@ def interceptor_process(wm):
                     best_target = (bx_f, by_f)
 
             if best_target is not None:
-                tx, ty = avoid_collision(
-                    rx, ry, best_target[0], best_target[1], y0, y1
-                )
+                tx, ty = avoid_collision(rx, ry, best_target[0], best_target[1], y0, y1)
                 tx, ty = safe_target(tx, ty, rx, ry)
 
                 vx, vy = movement.go_to((rx, ry, rtheta), (tx, ty))

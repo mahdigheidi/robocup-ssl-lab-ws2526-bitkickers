@@ -1,4 +1,4 @@
-#stiker role
+# stiker role
 import logging
 import time
 from enum import Enum, auto
@@ -25,13 +25,14 @@ STRIKER_AREA = RoleArea(
     x_max=-1500.0,
     y_min=-2900.0,
     y_max=2900.0,
-    defense_x=-3450.0, # goal box edge
+    defense_x=-3450.0,  # goal box edge
     defense_y_half=1050.0,
 )
 
 ROLE_AREA = STRIKER_AREA
 
 logger = logging.getLogger(__name__)
+
 
 def log_phase(robot, phase, reason: str):
     logger.info(
@@ -44,7 +45,6 @@ def log_phase(robot, phase, reason: str):
 # Striker Role
 # ============================================================================
 class Striker(Role):
-
     class Phase(Enum):
         HOLD = auto()
         SHADOW = auto()
@@ -54,7 +54,7 @@ class Striker(Role):
         INTERCEPT = auto()
         KICK_TO_GOAL = auto()
 
-    def __init__(self, blue_goal= None):
+    def __init__(self, blue_goal=None):
         super().__init__()
         self._possession_start = None
         self._goalie_hold_start = None
@@ -64,7 +64,6 @@ class Striker(Role):
     def get_initial_phase(self):
         return self.Phase.CHASING
 
-    
     def create_phase_machine(self, phase):
 
         if phase == self.Phase.RECEIVING:
@@ -76,20 +75,18 @@ class Striker(Role):
         if phase == self.Phase.CHASING:
             return ChasingBallStateMachine(ROLE_AREA)
 
-       # if phase == self.Phase.HOLD:
-           # return HoldPositionFaceBallStateMachine(self.home)
+        # if phase == self.Phase.HOLD:
+        # return HoldPositionFaceBallStateMachine(self.home)
 
         if phase == self.Phase.INTERCEPT:
             return InterceptionStateMachine(STRIKER_AREA)
-        
+
         if phase == self.Phase.KICK_TO_GOAL:
             return KickToGoalStateMachine(ROLE_AREA, force_center=self._force_center)
         if phase == self.Phase.SHADOW:
             return ShadowBallStateMachine(STRIKER_AREA)
 
         raise ValueError(phase)
-    
-
 
     def opp_goalie_has_ball(self, context: RobotContext) -> bool:
         if not context.opponents:
@@ -97,30 +94,23 @@ class Striker(Role):
 
         goal_op = -4500.0 if context.is_yellow else 4500.0
 
-        goalie = min(
-            context.opponents.values(),
-            key=lambda o: abs(o.position[0] - goal_op)
-        )
+        goalie = min(context.opponents.values(), key=lambda o: abs(o.position[0] - goal_op))
 
         return check_possession(context.ball.position, goalie.position)
 
-
-
-# Phase Update Logic
+    # Phase Update Logic
 
     def update_phase(self, robot, context: RobotContext):
-        
+
         bx, by = context.ball.position[:2]
         ball_legal = STRIKER_AREA.is_point_legal(context, bx, by)
-        
+
         teammate_has_ball = any(
-            check_possession(context.ball.position, t.position)
-            for t in context.teammates.values()
+            check_possession(context.ball.position, t.position) for t in context.teammates.values()
         )
 
         opponent_has_ball = any(
-            check_possession(context.ball.position, o.position)
-            for o in context.opponents.values()
+            check_possession(context.ball.position, o.position) for o in context.opponents.values()
         )
         ball_speed = np.linalg.norm(context.ball.velocity)
 
@@ -133,12 +123,12 @@ class Striker(Role):
         if is_near_ball:
             if self._possession_start is None:
                 self._possession_start = time.time()
-            
+
             # Check for ANY teammate also near the ball
             conflicting_teammates = []
             for t_id, t in context.teammates.items():
                 t_dist = np.linalg.norm(t.position[:2] - context.ball.position[:2])
-                if t_dist < 200.0: # teammate is also near/contesting
+                if t_dist < 200.0:  # teammate is also near/contesting
                     conflicting_teammates.append(t_id)
 
             if conflicting_teammates:
@@ -156,7 +146,7 @@ class Striker(Role):
             if robot.current_phase != self.Phase.RECEIVING:
                 robot.switch_phase(self.Phase.RECEIVING)
             return
-        
+
         if context.has_possession:
             # Fallback: if held for > 3s in any state, ensure we are in KICK_TO_GOAL
             if self._possession_start is not None and (time.time() - self._possession_start > 3.0):
@@ -164,7 +154,7 @@ class Striker(Role):
                 if robot.current_phase != self.Phase.KICK_TO_GOAL:
                     robot.switch_phase(self.Phase.KICK_TO_GOAL)
                 return
-            
+
             # Reset force_center if we just entered possession or are within normal time
             if self._possession_start is not None and (time.time() - self._possession_start <= 3.0):
                 self._force_center = False
@@ -189,13 +179,11 @@ class Striker(Role):
                 if t_dist < my_dist or (abs(t_dist - my_dist) < 2.0 and t_id < context.robot_id):
                     closest = False
                     break
-            
+
             if closest:
                 if robot.current_phase != self.Phase.CHASING:
                     robot.switch_phase(self.Phase.CHASING)
                 return
-            
-            
+
         if robot.current_phase != self.Phase.SHADOW:
             robot.switch_phase(self.Phase.SHADOW)
-   

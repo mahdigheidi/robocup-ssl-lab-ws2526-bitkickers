@@ -94,7 +94,6 @@ class RobotMovement:
     def set_allow_defense(self, allow: bool):
         self.allow_defense_area = allow
 
-
     def go_to(
         self,
         robot_pos: tuple[float, float, float] | np.ndarray,
@@ -117,7 +116,7 @@ class RobotMovement:
 
         # --- BOUNDARY ENFORCEMENT ---
         # Ensure robot center stays inside field with enough room for its body
-        buffer = ROBOT_RADIUS + 15.0 # Increased buffer to 103.5mm
+        buffer = ROBOT_RADIUS + 15.0  # Increased buffer to 103.5mm
         tx = float(np.clip(target[0], -4500.0 + buffer, 4500.0 - buffer))
         ty = float(np.clip(target[1], -3000.0 + buffer, 3000.0 - buffer))
         target_xy = (tx, ty)
@@ -129,7 +128,7 @@ class RobotMovement:
 
         # Convert target from world coordinates to robot coordinates
         # dx, dy = world2robot((x, y, theta), target_xy) # type: ignore
-        
+
         # -------------------------------
         # OBSTACLE-AWARE TARGET SELECTION
         # -------------------------------
@@ -137,7 +136,9 @@ class RobotMovement:
         dynamic_obs = dynamic_obstacles or []
 
         # Replan path if needed
-        if target_xy != self._path_goal or time.time() - self._last_plan_time > 0.5: # More frequent replanning
+        if (
+            target_xy != self._path_goal or time.time() - self._last_plan_time > 0.5
+        ):  # More frequent replanning
             try:
                 self._path = preprocess_best_path(
                     start=(x, y),
@@ -192,7 +193,6 @@ class RobotMovement:
             vy_cmd = 0.0
 
         return vx_cmd / 1000, vy_cmd / 1000
-
 
         """# Calculate position error
         position_error = math.hypot(dx, dy)

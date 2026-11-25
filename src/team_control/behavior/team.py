@@ -49,10 +49,12 @@ def team_control_process(wm: WorldModel):
     run_blue = True
 
     parser = ArgumentParser()
-    parser.add_argument("ip", type=str, nargs='?', default="192.168.178.2", help="grSim IP address")
+    parser.add_argument("ip", type=str, nargs="?", default="192.168.178.2", help="grSim IP address")
     parser.add_argument("--yellow", action="store_true", help="Control only yellow team")
     parser.add_argument("--blue", action="store_true", help="Control only blue team")
-    parser.add_argument("--ball", action="store_true", help="Send ball commands (do not enable in competition!)")
+    parser.add_argument(
+        "--ball", action="store_true", help="Send ball commands (do not enable in competition!)"
+    )
 
     parsed_args = parser.parse_args()
 
@@ -65,7 +67,6 @@ def team_control_process(wm: WorldModel):
     run_blue = not parsed_args.yellow
     run_yellow = not parsed_args.blue
     run_ball = parsed_args.ball
-
 
     if run_yellow:
         print("Starting YELLOW team...")

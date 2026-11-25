@@ -17,8 +17,7 @@ class BaseWorker(Process, ABC):
     @abstractmethod
     def step(self):
         pass
-        
-    
+
     def run(self):
         while True:
             try:

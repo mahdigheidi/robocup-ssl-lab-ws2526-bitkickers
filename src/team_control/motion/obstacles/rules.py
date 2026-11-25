@@ -37,6 +37,7 @@ def constrain_target(
 
     return tx, ty
 
+
 def avoid_defense_area_target(
     tx: float,
     ty: float,
@@ -50,4 +51,3 @@ def avoid_defense_area_target(
         # Push back along x-axis (away from opponent goal)
         tx = fallback_x - margin
     return tx, ty
-

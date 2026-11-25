@@ -112,7 +112,9 @@ class StateMachine(Generic[TContext]):
             self._current_state.on_enter(context)
             new_state_name = type(self._current_state).__name__
             elapsed = time.time() - _START_TIME
-            print(f"[STATE @ {elapsed:.3f}s] Forced transition: {old_state_name} -> {new_state_name}")
+            print(
+                f"[STATE @ {elapsed:.3f}s] Forced transition: {old_state_name} -> {new_state_name}"
+            )
 
         return self.get_current_state_type()
 
@@ -126,21 +128,20 @@ class StateMachine(Generic[TContext]):
         """
         # Execute current state
         self._current_state.execute(context, **kwargs)
-        
+
         # Check for transitions
         next_state_type = self._current_state.handle_transition(context)
         if next_state_type is not None and next_state_type in self._states:
             old_state = self._current_state
             self._current_state = self._states[next_state_type]
-            
+
             # Log state transition with robot ID if available
-            if hasattr(context, 'robot_id'):
+            if hasattr(context, "robot_id"):
                 pass
-                #logger.debug(
-                    #f"    R{context.robot_id} state: "
-                    #f"{old_state.__class__.__name__} -> {self._current_state.__class__.__name__}"
-                #)
-                
+                # logger.debug(
+                # f"    R{context.robot_id} state: "
+                # f"{old_state.__class__.__name__} -> {self._current_state.__class__.__name__}"
+                # )
 
     def force_transition(self, state_type: Type[State[TContext]], context: TContext) -> None:
         """

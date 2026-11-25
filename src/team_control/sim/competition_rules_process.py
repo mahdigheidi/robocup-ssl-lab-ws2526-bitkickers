@@ -6,11 +6,12 @@ from team_control.sim.ball_spawner import BallSpawner
 from team_control.sim.send_ball_grsim import send_ball_to_grsim
 
 # Ball spawner parameters
-DIVISION = 'B'          # 'A' or 'B'
+DIVISION = "B"  # 'A' or 'B'
 
 # grSim connection parameters
 SIM_IP = "127.0.0.1"
 CMD_LISTEN_PORT = 20011
+
 
 def competition_example_process(wm) -> None:
     # Initialize match standing
@@ -25,9 +26,7 @@ def competition_example_process(wm) -> None:
     version = 0
 
     # Initialize BallSpawner
-    spawner = BallSpawner(
-        division=DIVISION
-    )
+    spawner = BallSpawner(division=DIVISION)
 
     while True:
         # Update the world model when new frame is available
@@ -52,25 +51,20 @@ def competition_example_process(wm) -> None:
         elif version == 0:
             continue
 
-
         # --- IMPLEMENT YOUR TEAM STRATEGY HERE ---
-
-
 
         # ------------   CHECK FOR GOAL (DO NOT CHANGE)  ------------
         # Check if the ball crossed the goal line and is within the goal posts
         goal_y_min = -spawner.goal_width / 2
         goal_y_max = spawner.goal_width / 2
-        if (ball_pos[0] >= spawner.goal_line_x and goal_y_min <=
-                ball_pos[1] <= goal_y_max):
+        if ball_pos[0] >= spawner.goal_line_x and goal_y_min <= ball_pos[1] <= goal_y_max:
             goal_count_blue += 1
             print("Blue Team scored a GOAL !!!!!")
             print(f"Blue Team Goals: {goal_count_blue}")
             print(f"Yellow Team Goals: {goal_count_yellow}")
             spawn_ball_randomly_in_the_middle()
 
-        elif (ball_pos[0] <= -spawner.goal_line_x and goal_y_min <=
-                ball_pos[1] <= goal_y_max):
+        elif ball_pos[0] <= -spawner.goal_line_x and goal_y_min <= ball_pos[1] <= goal_y_max:
             goal_count_yellow += 1
             print("Yellow Team scored a GOAL !!!!!")
             print(f"Yellow Team Goals: {goal_count_yellow}")
@@ -80,6 +74,7 @@ def competition_example_process(wm) -> None:
         # ---- SPAWN THE BALL IN THE MIDDLE OF THE FIELD (DO NOT CHANGE) ----
         elif not spawner.is_ball_in_field(ball_pos):
             spawn_ball_randomly_in_the_middle()
+
 
 def spawn_ball_randomly_in_the_middle():
     x = random.uniform(-0.5, 0.5)

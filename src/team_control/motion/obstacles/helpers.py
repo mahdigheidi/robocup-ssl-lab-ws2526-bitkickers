@@ -10,23 +10,26 @@ from team_control.behavior.context import POSSESSION_THRESHOLD, RobotContext
 # ----------------------------------------------------
 # ------------ Constants and Polygons ----------------
 # ----------------------------------------------------
-ROBOT_RADIUS = 88.5 # m
+ROBOT_RADIUS = 88.5  # m
 
 COLLISION_DISTANCE = ROBOT_RADIUS * 2 + 10
 
 DEFENSE_AREA_POLYGON = [
     (3500, 1000),  # top-left
     (4500, 1000),  # top-right
-    (4500, -1000), # bottom-right
-    (3500, -1000), # bottom-left
+    (4500, -1000),  # bottom-right
+    (3500, -1000),  # bottom-left
 ]
 
-FIELD_POLYGON = Polygon([
-    (-4500, -3000),  # bottom-left corner
-    (-4500, 3000),   # top-left corner
-    (4500, 3000),    # top-right corner
-    (4500, -3000),   # bottom-right corner
-])
+FIELD_POLYGON = Polygon(
+    [
+        (-4500, -3000),  # bottom-left corner
+        (-4500, 3000),  # top-left corner
+        (4500, 3000),  # top-right corner
+        (4500, -3000),  # bottom-right corner
+    ]
+)
+
 
 # ----------------------------------------------------
 # --------------- GEOMETRY HELPERS -------------------
@@ -35,10 +38,12 @@ def distance(p1, p2):
     """Euclidean distance between points p1 and p2."""
     return math.hypot(p1[0] - p2[0], p1[1] - p2[1])
 
+
 def defense_area_polygon_for_team(is_yellow: bool):
     if is_yellow:
         return DEFENSE_AREA_POLYGON
     return [(-x, y) for (x, y) in DEFENSE_AREA_POLYGON]
+
 
 # ----------------------------------------------------
 # -------- STOP CONDITION CHECKING HELPERS -----------
@@ -54,12 +59,13 @@ def point_in_defense_area(context: RobotContext, agent_pos, robot_radius=ROBOT_R
     Returns:
         bool: True if any part of the robot is inside the defense area.
     """
-   
+
     if allow:
         return False
     robot_circle = Point(agent_pos).buffer(robot_radius)
     defense_area_poly = Polygon(defense_area_polygon_for_team(context.is_yellow))
     return robot_circle.intersects(defense_area_poly)
+
 
 def check_collisions(agent_pos, other_robot_pos):
     """
@@ -70,6 +76,7 @@ def check_collisions(agent_pos, other_robot_pos):
         if distance(agent_pos, robot_position) <= COLLISION_DISTANCE:
             return True
     return False
+
 
 def has_reached_target(robot_pos, target_pos, threshold=5):
     """
@@ -89,6 +96,7 @@ def has_reached_target(robot_pos, target_pos, threshold=5):
     dist = math.sqrt(dx * dx + dy * dy)
     return dist <= threshold
 
+
 def is_in_field(position):
     """
     Check if a given (x, y) position is inside the soccer field.
@@ -102,7 +110,17 @@ def is_in_field(position):
     point = Point(position)
     return FIELD_POLYGON.contains(point)
 
-def check_stop_conditions(agent_pos, target_pos, static_robots, dynamic_robots, elapsed_time=0, time_limit=30, is_goalie=False, is_yellow=True):
+
+def check_stop_conditions(
+    agent_pos,
+    target_pos,
+    static_robots,
+    dynamic_robots,
+    elapsed_time=0,
+    time_limit=30,
+    is_goalie=False,
+    is_yellow=True,
+):
     """
     Check all stop conditions and return (should_stop, message).
 
@@ -119,7 +137,10 @@ def check_stop_conditions(agent_pos, target_pos, static_robots, dynamic_robots, 
     """
 
     if has_reached_target(agent_pos, target_pos):
-        return True, f"Target reached in {elapsed_time:.2f} seconds.\n{time_limit-elapsed_time:.2f} POINTS, {agent_pos}"
+        return (
+            True,
+            f"Target reached in {elapsed_time:.2f} seconds.\n{time_limit - elapsed_time:.2f} POINTS, {agent_pos}",
+        )
 
     if not is_in_field(agent_pos):
         return True, "Robot left the field!\n0 POINTS"
@@ -129,12 +150,13 @@ def check_stop_conditions(agent_pos, target_pos, static_robots, dynamic_robots, 
         if check_collisions(agent_pos, all_obstacles):
             return True, "Collision detected with another robot!\n0 POINTS"
 
-    if point_in_defense_area(agent_pos, allow=is_goalie,is_yellow=is_yellow):
+    if point_in_defense_area(agent_pos, allow=is_goalie, is_yellow=is_yellow):
         return True, "Robot entered opponent's defense area!\n0 POINTS"
 
     return False, ""
 
-def ball_in_defense_area(context: RobotContext,ball_pos):
+
+def ball_in_defense_area(context: RobotContext, ball_pos):
     return Point(ball_pos).within(Polygon(defense_area_polygon_for_team(context.is_yellow)))
 
 

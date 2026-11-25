@@ -1,12 +1,12 @@
-""" File Logger
-    Created by @JustinShirzad
+"""File Logger
+Created by @JustinShirzad
 
-    Create simple logs for your Python project.
-    Uses process names and timestamps to automatically create and write to a log file.
+Create simple logs for your Python project.
+Uses process names and timestamps to automatically create and write to a log file.
 
-    e.g. 
-    [ INFO ] : 14:30:45 12-07-2025 : my_script - Line 11 : Process started
-    [ ERROR ] : 14:30:46 12-07-2025 : my_script - Line 12 : Connection failed
+e.g.
+[ INFO ] : 14:30:45 12-07-2025 : my_script - Line 11 : Process started
+[ ERROR ] : 14:30:46 12-07-2025 : my_script - Line 12 : Connection failed
 """
 
 import inspect
@@ -18,16 +18,16 @@ from datetime import datetime
 
 class LogSaver:
     def __init__(
-            self,
-            log_dir = "logs",
-            process_name = None,
-            id = None,
-            show_timestamp = True,
-            show_process_name = True,
-            show_line_number = True,
-            show_level = True
-            ):
-        
+        self,
+        log_dir="logs",
+        process_name=None,
+        id=None,
+        show_timestamp=True,
+        show_process_name=True,
+        show_line_number=True,
+        show_level=True,
+    ):
+
         self.log_dir = log_dir
         self.process_name = process_name
         self.id = id
@@ -74,34 +74,31 @@ class LogSaver:
             log.write(f"|=== Started: {datetime.now().strftime('%H:%M:%S %d-%m-%Y')} ===|\n")
 
         return log_file, process_name
-    
+
     def setup_logger(self):
         self.logger = logging.getLogger(self.process_name)
         self.logger.setLevel(logging.DEBUG)
-            
+
         # Create file handler to write to the correct log file
         self.logger.handlers.clear()
         file_handler = logging.FileHandler(self.log_file)
         file_handler.setLevel(logging.DEBUG)
 
-        log_format = '[ %(levelname)s ] : %(asctime)s : %(name)s - %(message)s'
+        log_format = "[ %(levelname)s ] : %(asctime)s : %(name)s - %(message)s"
 
         if not self.show_level:
-            log_format = log_format.replace('[ %(levelname)s ] : ', '')
+            log_format = log_format.replace("[ %(levelname)s ] : ", "")
         if not self.show_timestamp:
-            log_format = log_format.replace('%(asctime)s : ', '')
+            log_format = log_format.replace("%(asctime)s : ", "")
         if not self.show_process_name:
-            log_format = log_format.replace('%(name)s', '')
+            log_format = log_format.replace("%(name)s", "")
         if not self.show_line_number and self.show_process_name:
-            log_format = log_format.replace(' - ', '')
-        
+            log_format = log_format.replace(" - ", "")
+
         # Format the log messages for the file
-        log_formatter = logging.Formatter(
-            fmt=log_format,
-            datefmt='%H:%M:%S %d-%m-%Y'
-        )
+        log_formatter = logging.Formatter(fmt=log_format, datefmt="%H:%M:%S %d-%m-%Y")
         file_handler.setFormatter(log_formatter)
-        
+
         # Add handler to logger
         self.logger.addHandler(file_handler)
 
@@ -142,8 +139,8 @@ class LogSaver:
     def critical(self, message):
         self.create_log("critical", str(message))
 
+
 if __name__ == "__main__":
-        
     logs = LogSaver()
 
     logs.info("This is an info message.")

@@ -22,7 +22,6 @@ __all__ = [
     "ReceivingStateMachine",
     "StrikerStateMachine",
     "ShootingStateMachine",
-
     # Basic roles
     "HoldPositionFaceBallStateMachine",
     "InterceptionStateMachine",

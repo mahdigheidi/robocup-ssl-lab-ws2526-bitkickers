@@ -1,4 +1,4 @@
-# goalie role 
+# goalie role
 import logging
 import time
 from enum import Enum, auto
@@ -30,6 +30,7 @@ GOALIE_AREA = RoleArea(
 
 ROLE_AREA = GOALIE_AREA
 
+
 class Goalkeeper(Role):
     class Phase(Enum):
         ACTIVE = auto()
@@ -45,7 +46,7 @@ class Goalkeeper(Role):
         return self.Phase.ACTIVE
 
     def create_phase_machine(self, phase: Phase) -> StateMachine[RobotContext]:
-        #logger.info(f"[GOALIE] Creating phase machine: {phase.name}")
+        # logger.info(f"[GOALIE] Creating phase machine: {phase.name}")
 
         if phase == self.Phase.ACTIVE:
             return GoalieStateMachine(ROLE_AREA)
@@ -59,15 +60,13 @@ class Goalkeeper(Role):
             return ShootingStateMachine(ROLE_AREA, is_goalie=True)
 
         raise ValueError(f"Unknown phase: {phase}")
-    
 
     def update_phase(self, robot, context: RobotContext):
         # Check if ball is inside THIS goalie's defense area
-       
+
         y_defense = ball_in_defense_area(context, context.ball.position)
         teammate_has_ball = any(
-            check_possession(context.ball.position, t.position)
-            for t in context.teammates.values()
+            check_possession(context.ball.position, t.position) for t in context.teammates.values()
         )
 
         # Conflict Resolution: Multiple robots with ball
@@ -77,7 +76,7 @@ class Goalkeeper(Role):
         if is_near_ball:
             if self._possession_start is None:
                 self._possession_start = time.time()
-            
+
             conflicting_teammates = []
             for t_id, t in context.teammates.items():
                 t_dist = np.linalg.norm(t.position[:2] - context.ball.position[:2])
@@ -92,8 +91,8 @@ class Goalkeeper(Role):
         else:
             if not context.has_possession:
                 self._possession_start = None
-        
-        #ACTIVE 
+
+        # ACTIVE
         if robot.current_phase == self.Phase.ACTIVE:
             if y_defense:
                 robot.switch_phase(self.Phase.CHASING)
@@ -116,7 +115,7 @@ class Goalkeeper(Role):
             if not context.has_possession:
                 robot.switch_phase(self.Phase.ACTIVE)
                 return
-            
+
             # Check for 2 second timeout to switch to SHOOTING
             if self._possession_start is not None and (time.time() - self._possession_start > 2.0):
                 robot.switch_phase(self.Phase.SHOOTING)
@@ -129,7 +128,8 @@ class Goalkeeper(Role):
                 return
 
 
-# Ordered pass targets 
+# Ordered pass targets
+
 
 def select_best_pass_target(context: RobotContext) -> Optional[int]:
     """
@@ -142,18 +142,20 @@ def select_best_pass_target(context: RobotContext) -> Optional[int]:
 
     for tid, teammate in context.teammates.items():
         dist = np.linalg.norm(teammate.position[:2] - my_pos)
-        
+
         # Don't pass to defender if they are standing right next to us
         if dist < 400.0:
             continue
-            
+
         if dist > max_dist:
             max_dist = dist
             best_tid = tid
 
     # Fallback to furthest
     if best_tid is None and context.teammates:
-        best_tid = max(context.teammates.keys(), 
-                       key=lambda tid: np.linalg.norm(context.teammates[tid].position[:2] - my_pos))
+        best_tid = max(
+            context.teammates.keys(),
+            key=lambda tid: np.linalg.norm(context.teammates[tid].position[:2] - my_pos),
+        )
 
     return best_tid

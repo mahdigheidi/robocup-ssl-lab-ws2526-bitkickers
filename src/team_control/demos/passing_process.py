@@ -158,7 +158,7 @@ def passing_process(wm: WorldModel):
         )
 
         ball_speed = np.linalg.norm(ball_velocity)
-        
+
         # Check if ball is moving toward each robot
         def ball_moving_toward(robot_pos: np.ndarray) -> bool:
             if ball_speed < BALL_SLOW_THRESHOLD:
@@ -169,7 +169,7 @@ def passing_process(wm: WorldModel):
             if dist < 1:
                 return False
             return np.dot(ball_dir, to_robot / dist) > 0.3
-        
+
         # Switch phases based on ball responsibility
         if passer_id == 0:
             # Robot 0 is responsible for the ball
@@ -240,7 +240,7 @@ def passing_process(wm: WorldModel):
             last_possessor = current_possessor
 
         # ---- STOPPING CONDITIONS ----
-        
+
         # if has_blue:
         #     if blue_possession_start is None:
         #         blue_possession_start = time.time()
@@ -248,15 +248,12 @@ def passing_process(wm: WorldModel):
         #         print("Blue robot intercepted the ball!")
         #         break
         #         #pass
-       
-              
+
         else:
             blue_possession_start = None
 
         if not spawner.is_ball_in_field(ball_pos):
             print("Ball is out of field!")
             break
-     
-          
 
     print(f"Final result: {pass_count} passes in {time.time() - start_time:.1f} seconds")

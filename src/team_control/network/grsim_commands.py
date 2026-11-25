@@ -31,7 +31,7 @@ class GrSimRobotCommands:
         kick_speed_z (float): Default kick speed in z direction (chip kick).
         wheel_speed (bool): Whether to use individual wheel speed mode.
     """
-    
+
     def __init__(self, isYellow: bool):
         """
         Initialize the GrSimRobotCommands (GSC) object.
@@ -40,11 +40,11 @@ class GrSimRobotCommands:
             isYellow (bool): Team color. True for yellow, False for blue.
         """
 
-        self.isYellow : bool = isYellow 
-        self.kick_speed_x : float = 10.0
-        self.kick_speed_z : float = 0.0 # we have no chip kicker at the moment
-        self.wheel_speed : bool = False
-        
+        self.isYellow: bool = isYellow
+        self.kick_speed_x: float = 10.0
+        self.kick_speed_z: float = 0.0  # we have no chip kicker at the moment
+        self.wheel_speed: bool = False
+
     def update_is_yellow(self, new_is_Yellow: bool) -> None:
         """
         Update the team color dynamically.
@@ -53,8 +53,10 @@ class GrSimRobotCommands:
             new_is_yellow (bool): New team color.
         """
         self.isYellow = new_is_Yellow
-    
-    def _robot_command_wrapper(self, robot_id:int, vx: float,vy: float,w: float, k:int, d:bool) -> object:
+
+    def _robot_command_wrapper(
+        self, robot_id: int, vx: float, vy: float, w: float, k: int, d: bool
+    ) -> object:
         """
         Wrap raw command parameters into a grSim_Robot_Command protobuf.
 
@@ -73,7 +75,7 @@ class GrSimRobotCommands:
         vx, vy, w = float(vx), float(vy), float(w)
         k, d = int(k), bool(d)
 
-        grSim_robot_command =  grSim_Commands_pb2.grSim_Robot_Command(
+        grSim_robot_command = grSim_Commands_pb2.grSim_Robot_Command(
             id=robot_id,
             kickspeedx=k,
             kickspeedz=self.kick_speed_z if k else 0.0,
@@ -81,10 +83,10 @@ class GrSimRobotCommands:
             velnormal=vy,
             velangular=w,
             spinner=d,
-            wheelsspeed=self.wheel_speed
-            )
+            wheelsspeed=self.wheel_speed,
+        )
         return grSim_robot_command
-    
+
     @staticmethod
     def _commands_wrapper(is_yellow, grSim_robot_command) -> object:
         """
@@ -98,12 +100,10 @@ class GrSimRobotCommands:
             grSim_Commands: GrSim protobuf message.
         """
         grSim_commands = grSim_Commands_pb2.grSim_Commands(
-            timestamp=time.time(),
-            isteamyellow=is_yellow,
-            robot_commands=[grSim_robot_command]
-            )
+            timestamp=time.time(), isteamyellow=is_yellow, robot_commands=[grSim_robot_command]
+        )
         return grSim_commands
-    
+
     def new_command(self, robot_id, vx, vy, w, k, d, use_team_color=True):
         """
         Generate a new grSim command from raw parameters.
@@ -120,12 +120,12 @@ class GrSimRobotCommands:
         Returns:
             grSim_Commands: GrSim protobuf message.
         """
-        isYellow = self.isYellow if use_team_color is True else not(self.isYellow)
-        grSim_robot_command = self._robot_command_wrapper(robot_id,vx,vy,w,k,d)
-        grSim_commands = self._commands_wrapper(isYellow,grSim_robot_command)
+        isYellow = self.isYellow if use_team_color is True else not (self.isYellow)
+        grSim_robot_command = self._robot_command_wrapper(robot_id, vx, vy, w, k, d)
+        grSim_commands = self._commands_wrapper(isYellow, grSim_robot_command)
         return grSim_commands
-    
-    def convert(self, robot_command:RobotCommand, use_team_color=True) -> object:
+
+    def convert(self, robot_command: RobotCommand, use_team_color=True) -> object:
         """
         Convert an internal RobotCommand object to grSim command.
 
@@ -143,7 +143,8 @@ class GrSimRobotCommands:
             w=robot_command.w,
             k=robot_command.kick,
             d=robot_command.dribble,
-            use_team_color=use_team_color)
+            use_team_color=use_team_color,
+        )
         return grSim_command
 
     def encode(self, grSim_commands) -> bytes:
@@ -159,8 +160,8 @@ class GrSimRobotCommands:
         grSim_packet = grSim_Packet_pb2.grSim_Packet(commands=grSim_commands)
         byte_packet = grSim_packet.SerializeToString()
         return byte_packet
-    
-    def decode(self, grSim_commands)-> object :
+
+    def decode(self, grSim_commands) -> object:
         """
         Decode serialized grSim packet back into protobuf object.
 
@@ -171,8 +172,9 @@ class GrSimRobotCommands:
             grSim_Packet: Decoded protobuf object.
         """
         decoder = grSim_Packet_pb2.grSim_Packet()
-        grSim_commands:str= decoder.FromString(grSim_commands) 
+        grSim_commands: str = decoder.FromString(grSim_commands)
         return grSim_commands
+
 
 # --------------------------
 # Example Usage
@@ -182,14 +184,15 @@ def example_1():
     Example 1: Generate a new raw grSim command using new_command.
     """
     isYellow = True
-    GSC = GrSimRobotCommands(isYellow=isYellow) #remember ! ! 
+    GSC = GrSimRobotCommands(isYellow=isYellow)  # remember ! !
     # Generate a command for robot 1 with velocities, kick, and dribble
-    msg1 = GSC.new_command(robot_id=1,vx=2.0,vy=1.0,w=1,k=1,d=1,use_team_color=True)
-    print("Raw grSim command:", msg1) 
-    
+    msg1 = GSC.new_command(robot_id=1, vx=2.0, vy=1.0, w=1, k=1, d=1, use_team_color=True)
+    print("Raw grSim command:", msg1)
+
     # Encode the command for sending over the network
     encoded = GSC.encode(msg1)
     print("Encoded packet:", encoded)
+
 
 def example_2():
     """
@@ -200,14 +203,15 @@ def example_2():
 
     # Create internal robot command
     r1 = RobotCommand(robot_id=1, vx=2, vy=3, w=4, kick=True, dribble=False)
-    
+
     # Convert to grSim command
     msg2 = GSC.convert(r1)
-    
+
     # Encode for transmission
     encoded = GSC.encode(msg2)
     print("Converted grSim command:", msg2)
     print("Encoded packet:", encoded)
+
 
 def example_3():
     """
@@ -240,9 +244,9 @@ def example_4():
     print("Command with updated team color:", msg4)
     print("Packet team is yellow:", msg4.isteamyellow)
 
+
 if __name__ == "__main__":
     example_1()
     example_2()
     example_3()
     example_4()
-    

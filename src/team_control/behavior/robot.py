@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 class Robot(Generic[R]):
     """
     A robot with autonomous behavior based on roles and phases.
-    
+
     Generic over role type R for type safety (e.g., Robot[Attacker], Robot[Goalkeeper]).
     """
 
@@ -40,7 +40,6 @@ class Robot(Generic[R]):
         self.movement = RobotMovement()
         self.role = role
         self.movement.allow_defense_area = isinstance(role, Goalkeeper)
-
 
         # Current state
         self.position: np.ndarray = np.array([0.0, 0.0, 0.0], dtype=np.float32)
@@ -77,14 +76,13 @@ class Robot(Generic[R]):
             old_phase = self.current_phase
             self.current_phase = new_phase
             self._phase_machine = self.role.create_phase_machine(new_phase)
-            #logger.info(
-                #f"R{self.robot_id}[{self.role.__class__.__name__}] "
-                #f"PHASE: {old_phase.name} -> {new_phase.name}"
-            #)
-    
+            # logger.info(
+            # f"R{self.robot_id}[{self.role.__class__.__name__}] "
+            # f"PHASE: {old_phase.name} -> {new_phase.name}"
+            # )
+
     @property
     def current_state_name(self) -> str:
-        
         """Get the name of the current state in the active phase machine."""
         return self._phase_machine.get_current_state().__class__.__name__
 
@@ -92,7 +90,6 @@ class Robot(Generic[R]):
         self,
         world_state: WorldState,
         sender: grSimSender,
-        
         **kwargs,
     ):
         """
@@ -104,13 +101,12 @@ class Robot(Generic[R]):
             **kwargs: Additional parameters needed by state machines (e.g., spawner, passing_min_distance)
         """
         # Build context for this robot from world state
-     
-        context = world_state.get_robot_context(self.robot_id, self.is_yellow)
-       
 
-         # ROLE decides phase transitions
+        context = world_state.get_robot_context(self.robot_id, self.is_yellow)
+
+        # ROLE decides phase transitions
         if hasattr(self.role, "update_phase"):
-            self.role.update_phase(self,context)
+            self.role.update_phase(self, context)
 
         # Execute current phase's state machine
         self._phase_machine.execute(context, sender=sender, movement=self.movement, **kwargs)

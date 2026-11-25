@@ -35,8 +35,7 @@ class BallSpawner:
         Width of the goal (in mm).
     """
 
-    def __init__(self, division='B', ball_speed=5.0, goal_probability=0.5,
-                 seed=None):
+    def __init__(self, division="B", ball_speed=5.0, goal_probability=0.5, seed=None):
         self.division = division
         self.ball_speed = ball_speed
         self.goal_probability = goal_probability
@@ -45,14 +44,14 @@ class BallSpawner:
 
         self.random_gen = random.Random(seed)
 
-        if self.division == 'B':
+        if self.division == "B":
             self.field_x_min, self.field_x_max = -4500, 4500
             self.field_y_min, self.field_y_max = -3000, 3000
             # self.goal_line_x = 4200
             # self.goal_width = 950
             self.goal_line_x = 4500
             self.goal_width = 1000
-        elif self.division == 'A':
+        elif self.division == "A":
             self.field_x_min, self.field_x_max = -6000, 6000
             self.field_y_min, self.field_y_max = -4500, 4500
             self.goal_line_x = 5700
@@ -93,7 +92,9 @@ class BallSpawner:
     def is_ball_in_field(self, pos):
         """Check if a ball is within the field boundaries."""
         x, y = pos
-        return self.field_x_min <= x <= self.field_x_max and self.field_y_min <= y <= self.field_y_max
+        return (
+            self.field_x_min <= x <= self.field_x_max and self.field_y_min <= y <= self.field_y_max
+        )
 
     @staticmethod
     def is_ball_idle(current, previous):

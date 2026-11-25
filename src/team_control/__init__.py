@@ -5,16 +5,17 @@ import sys
 
 def redirect_print_to_log(print_is_enabled=True):
     log = ""
+
     def outer(func):
         @functools.wraps
         def inner(*args, **kwargs):
             # make a copy of sys.stdout and sys.stderr
             stdout = sys.stdout
             stderr = sys.stderr
-            
-            with open('/dev/null') as f:
-                    sys.stdout = f
-                    sys.stderr = f
+
+            with open("/dev/null") as f:
+                sys.stdout = f
+                sys.stderr = f
 
             if print_is_enabled:
                 # set flag to make a new log file
@@ -37,5 +38,7 @@ def redirect_print_to_log(print_is_enabled=True):
             # reset sys.stdout and sys.stderr
             sys.stdout = stdout
             sys.stderr = stderr
+
         return inner
+
     return outer
