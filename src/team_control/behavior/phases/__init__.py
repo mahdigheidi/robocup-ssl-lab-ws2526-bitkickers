@@ -13,7 +13,6 @@ from team_control.behavior.phases.basic import (
     InterceptionStateMachine,
     BlockingStateMachine,
     KickToGoalStateMachine,
-    SupportBehindBallStateMachine,
     GoalieStateMachine,
 )
 
@@ -29,7 +28,6 @@ __all__ = [
     "HoldPositionFaceBallStateMachine",
     "InterceptionStateMachine",
     "BlockingStateMachine",
-    "SupportBehindBallStateMachine",
     "GoalieStateMachine",
     "KickToGoalStateMachine",
 ]

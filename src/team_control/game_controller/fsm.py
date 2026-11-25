@@ -77,14 +77,14 @@ class GCfsm ():
             return # no color identified = > do nothing
         
         # check yellow cards in our team
-        yellow_cards = new_ref_msg.yellow.yellow_cards if self.us_yellow == True else new_ref_msg.blue.yellow_cards
+        yellow_cards = new_ref_msg.yellow.yellow_cards if self.us_yellow else new_ref_msg.blue.yellow_cards
         
         if self.yellow_cards != yellow_cards :  # number not equal
             print(f"yellow card number changed : {yellow_cards}")
             self.yellow_cards = yellow_cards
         
         # check how many are still active
-        yellow_card_active:int = len(new_ref_msg.yellow.yellow_card_times) if self.us_yellow==True else len(new_ref_msg.blue.yellow_card_times)
+        yellow_card_active:int = len(new_ref_msg.yellow.yellow_card_times) if self.us_yellow else len(new_ref_msg.blue.yellow_card_times)
         
         if yellow_card_active != self.yellow_card_active: # if this has changes (more / less)
             print(f"yellow card times changed : {yellow_card_active}")
@@ -93,7 +93,7 @@ class GCfsm ():
             update_numbers = True
         
         # check red cards in our Team
-        red_cards = new_ref_msg.yellow.red_cards if self.us_yellow == True else new_ref_msg.blue.red_cards
+        red_cards = new_ref_msg.yellow.red_cards if self.us_yellow else new_ref_msg.blue.red_cards
         # check if there's number changes from the record
         if self.red_cards != red_cards : 
             print(f"red card number changed : {red_cards}")
@@ -102,7 +102,7 @@ class GCfsm ():
             update_numbers = True
         
         # checking fouls in our team
-        fouls = new_ref_msg.yellow.foul_counter if self.us_yellow == True else new_ref_msg.blue.foul_counter
+        fouls = new_ref_msg.yellow.foul_counter if self.us_yellow else new_ref_msg.blue.foul_counter
         if self.fouls != fouls:
             print(f"Foul Counter has changed : {fouls}")
             self.fouls = fouls # 3 fouls = 1 yellow card 
@@ -143,9 +143,9 @@ class GCfsm ():
         if new_ref_msg.blue_team_on_positive_half is None:
             pass
         elif new_ref_msg.blue_team_on_positive_half is True:
-            us_positive = False if  us_yellow == True else True
+            us_positive = not us_yellow
         elif new_ref_msg.blue_team_on_positive_half is False:
-            us_positive = True if  us_yellow == True else False
+            us_positive = bool(us_yellow)
         
         if self.us_yellow != us_yellow or self.us_positive != us_positive:
             self.us_yellow = us_yellow
@@ -232,7 +232,8 @@ class GCfsm ():
                 # self.forward_ball_location(e.event_data)
                 print("ball_left_field")
             if e.type == GameEventType.BOT_SUBSTITUTION : 
-                if e.by_team == Team.YELLOW if self.us_yellow == True else Team.BLUE:
+                our_team = Team.YELLOW if self.us_yellow else Team.BLUE
+                if e.by_team == our_team:
                     print("we sub robot")
                 
     def forward_ball_location(self,event_data):

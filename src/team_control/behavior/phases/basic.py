@@ -1,9 +1,6 @@
 import math
 import time
-from venv import logger
 from team_control.demos.interceptor_process import avoid_collision, block_pass_point, is_safe_from_robots, time_to_reach, safe_target
-from team_control.network import sender
-from team_control.behavior import context
 from team_control.behavior.phases.ball_handling import calculate_receiver_position, is_path_blocked
 import numpy as np
 from typing import Optional, Type, Any
@@ -592,10 +589,6 @@ class HoldPositionFaceBallStateMachine(StateMachine):
     def __init__(self, home):
         super().__init__(HoldPositionFaceBallState(home))
 
-
-class SupportBehindBallStateMachine(StateMachine):
-    def __init__(self, yellow_goal):
-        super().__init__(SupportBehindBallState(yellow_goal))   
 
 class GoalieStateMachine(StateMachine):
     def __init__(self, role_area: Optional[RoleArea] = None):

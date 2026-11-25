@@ -59,7 +59,7 @@ class GameControllerManager:
             ref_msg = RefereeMessage.from_proto(ref_msg)
             return ref_msg
         except Exception as e:
-            raise Exception(f"exception encountered : {ExceptionGroup}{e}")
+            raise Exception(f"exception encountered : {e}") from e
 
 
 def game_controller_worker(output_q):

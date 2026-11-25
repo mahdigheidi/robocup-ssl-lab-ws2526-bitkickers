@@ -143,7 +143,7 @@ class grSimSender(Sender):
             try:
                 msg = self.GSC.encode(msg)
             except Exception as e:
-                raise ValueError(f"Error encoding grSim message: {e}")
+                raise ValueError(f"Error encoding grSim message: {e}") from e
         self.sock.sendto(msg,self.destination)
     
     def send_command(self, robot_command,use_team_color=True) -> None:

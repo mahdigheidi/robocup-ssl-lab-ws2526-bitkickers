@@ -3,7 +3,6 @@ import logging
 from typing import Optional
 from enum import Enum, auto
 from team_control.motion.obstacles.helpers import RoleArea, check_possession
-from team_control.behavior import robot
 from team_control.behavior.phases.ball_handling import ReceivingStateMachine
 from team_control.behavior.phases.basic import ShadowBallStateMachine
 from team_control.behavior.role import Role

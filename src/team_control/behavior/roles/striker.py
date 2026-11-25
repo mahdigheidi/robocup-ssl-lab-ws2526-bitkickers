@@ -3,9 +3,7 @@ from enum import Enum, auto
 import time
 import logging
 from team_control.motion.obstacles.helpers import RoleArea, check_possession
-from team_control.behavior import context
 from team_control.behavior.phases.ball_handling import is_path_blocked
-from team_control.behavior.roles import goalie
 import numpy as np
 from team_control.behavior.role import Role
 from team_control.behavior.context import RobotContext, teammate_can_chase_ball

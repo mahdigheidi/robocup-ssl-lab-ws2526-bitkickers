@@ -1,7 +1,6 @@
 """Robot class - encapsulates a single robot with its role and phase-based behavior."""
 
 import logging
-from multiprocessing import context
 from typing import Generic, TypeVar
 from enum import Enum
 from team_control.behavior.roles.goalie import Goalkeeper

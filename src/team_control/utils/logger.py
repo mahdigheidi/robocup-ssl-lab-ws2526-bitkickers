@@ -125,22 +125,6 @@ class LogSaver:
         elif log_level == "critical":
             self.logger.critical(formatted_message)
 
-    # Logging methods (Single letter)
-    def D(self, message):
-        self.create_log("debug", str(message))
-
-    def I(self, message):
-        self.create_log("info", str(message))
-    
-    def W(self, message):
-        self.create_log("warning", str(message))
-
-    def E(self, message):
-        self.create_log("error", str(message))
-
-    def C(self, message):
-        self.create_log("critical", str(message))
-
     # Logging methods (Full words)
     def debug(self, message):
         self.create_log("debug", str(message))

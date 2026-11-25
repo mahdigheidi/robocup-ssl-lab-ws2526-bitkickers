@@ -68,7 +68,7 @@ class TrackedRobot():
 
 class TrackedFrame():
     def __init__(self,frame_number:int,timestamp:float,balls:list[TrackedBall],
-                 robots:list[TrackedRobot],kicked_ball:KickedBall=None,capability:Capability=list()
+                 robots:list[TrackedRobot],kicked_ball:KickedBall=None,capability:list[Capability]=None
                  ):
         ## A monotonous increasing frame counter
         self.frame_number:int = frame_number
@@ -87,7 +87,7 @@ class TrackedFrame():
         self.kicked_ball:KickedBall = kicked_ball
         
         ## List of capabilities of the source implementation
-        self.capability:list[Capability]=capability
+        self.capability:list[Capability]=capability if capability is not None else []
 
 
 class TrackerWrapperPacket() :

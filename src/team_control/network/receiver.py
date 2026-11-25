@@ -56,8 +56,8 @@ class Receiver(BaseSocket):
     def _decode(self,data:bytes):
         try:
             decoded_data = data.decode()
-        except UnicodeDecodeError:
-            raise UnicodeDecodeError(f"cannot decode {data} with default 'utf-8'")
+        except UnicodeDecodeError as e:
+            raise ValueError(f"cannot decode {data!r} with default 'utf-8'") from e
         return decoded_data
 
 class Broadcast(Receiver):

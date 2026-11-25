@@ -1,4 +1,3 @@
-from typing import Optional
 from team_control.game_controller.common import *
 from dataclasses import dataclass, field
 from typing import Optional, Union, List

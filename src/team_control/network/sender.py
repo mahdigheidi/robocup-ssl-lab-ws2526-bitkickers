@@ -66,7 +66,7 @@ class Sender(BaseSocket):
             try:
                 msg = msg.encode()
             except Exception as e:
-                raise ValueError(f"Error encoding message: {e}")
+                raise ValueError(f"Error encoding message: {e}") from e
             
         self.sock.sendto(msg,addr)
             
