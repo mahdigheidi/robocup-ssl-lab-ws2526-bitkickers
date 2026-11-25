@@ -9,7 +9,8 @@ dependencies = [
     "numpy",
     "matplotlib",
     "protobuf",
-    "PyYAML"
+    "PyYAML",
+    "shapely",  # obstacle avoidance (motion/obstacles) needs it on every run
 ]
 
 dynamic = [
@@ -24,7 +25,6 @@ version = {attr = "team_control.__version__"}
 
 [project.optional-dependencies]
 pathplanning = [
-    "Shapely",
     "scikit-learn",
     "networkx",
     ]
