@@ -27,7 +27,7 @@ from TeamControl.robot.roles.passer import Passer
 
 from TeamControl.robot.roles.midfielder import Midfielder
 
-SIM_IP = "127.0.0.1"
+SIM_IP = "192.168.178.2"
 CMD_LISTEN_PORT = 20011
 DIVISION = "B"
 
@@ -56,7 +56,7 @@ def team_control_process(wm: WorldModel):
     run_blue = True
 
     parser = ArgumentParser()
-    parser.add_argument("ip", type=str, nargs='?', default="127.0.0.1", help="grSim IP address")
+    parser.add_argument("ip", type=str, nargs='?', default="192.168.178.2", help="grSim IP address")
     parser.add_argument("--yellow", action="store_true", help="Control only yellow team")
     parser.add_argument("--blue", action="store_true", help="Control only blue team")
     parser.add_argument("--ball", action="store_true", help="Send ball commands (do not enable in competition!)")
@@ -167,6 +167,7 @@ def team_control_process(wm: WorldModel):
     world_state = WorldState()
     version = 0
     last_time = time.time()
+    time.sleep(2)
 
     # MAIN LOOP
 
@@ -179,7 +180,10 @@ def team_control_process(wm: WorldModel):
             world_state.update(wm, now)
 
             for rid, robo in robots.items():
-                st = world_state.get_robot_state(rid, is_yellow=True)
+                try:
+                    st = world_state.get_robot_state(rid, is_yellow=True)
+                except Exception as e:
+                    continue
 
                 if st:
                     robo.update_position(st.position)
