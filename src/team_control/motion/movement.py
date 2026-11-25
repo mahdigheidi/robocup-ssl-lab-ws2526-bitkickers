@@ -264,3 +264,26 @@ class RobotMovement:
         w_cmd = w_cmd if theta_error > 0 else -w_cmd
 
         return w_cmd
+
+
+def time_to_reach(d_mm: float, v_max: float = 3000.0, a_max: float = 1700.0) -> float:
+    """
+    Analytic time estimate for the robot to reach a target distance.
+
+    Uses a trapezoidal (or triangular) velocity profile consistent
+    with the movement controller.
+
+    Args:
+        d_mm: Distance to target in millimeters
+        v_max: Maximum linear speed (mm/s)
+        a_max: Maximum linear acceleration (mm/s^2)
+
+    Returns:
+        Estimated time in seconds
+    """
+    d_switch = (v_max * v_max) / a_max
+
+    if d_mm <= d_switch:
+        return 2.0 * math.sqrt(d_mm / a_max)
+    else:
+        return (d_mm / v_max) + (v_max / a_max)

@@ -6,8 +6,8 @@ import numpy as np
 
 from team_control.behavior.context import RobotContext, RoleArea
 from team_control.behavior.phases.ball_handling import is_path_blocked
-from team_control.demos.interceptor_process import is_safe_from_robots, time_to_reach
-from team_control.motion.obstacles.helpers import avoid_collision_robust
+from team_control.motion.movement import time_to_reach
+from team_control.motion.obstacles.helpers import avoid_collision_robust, is_safe_from_robots
 from team_control.network.robot_command import RobotCommand
 from team_control.network.ssl_sockets import grSimSender
 from team_control.sim.ball_idle_spawner import BallIdleSpawner

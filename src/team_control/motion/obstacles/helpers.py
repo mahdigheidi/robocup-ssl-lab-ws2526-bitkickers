@@ -186,3 +186,10 @@ def avoid_collision_robust(rx, ry, tx, ty, opponents, safe_dist=COLLISION_DISTAN
 # ----------------------------------------------------
 # ---------------- ROLE AREA SYSTEM ------------------
 # ----------------------------------------------------
+
+
+def is_safe_from_robots(tx: float, ty: float, robots: list, margin: float = 200.0) -> bool:
+    for r in robots:
+        if distance((tx, ty), r[:2]) < COLLISION_DISTANCE + margin:
+            return False
+    return True

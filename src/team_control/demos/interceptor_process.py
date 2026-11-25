@@ -15,11 +15,10 @@ import time
 import numpy as np
 
 from team_control.behavior.context import POSSESSION_THRESHOLD, WorldState
-from team_control.motion.movement import RobotMovement
+from team_control.motion.movement import RobotMovement, time_to_reach
 from team_control.motion.obstacles.helpers import (
-    COLLISION_DISTANCE,
-    distance,
     is_in_field,
+    is_safe_from_robots,
     point_in_defense_area,
 )
 from team_control.network.robot_command import RobotCommand
@@ -44,42 +43,12 @@ GOAL_X = 4500
 GOAL_Y = 0.0
 
 
-def time_to_reach(d_mm: float, v_max: float = MAX_SPEED, a_max: float = MAX_ACCEL) -> float:
-    """
-    Analytic time estimate for the robot to reach a target distance.
-
-    Uses a trapezoidal (or triangular) velocity profile consistent
-    with the movement controller.
-
-    Args:
-        d_mm: Distance to target in millimeters
-        v_max: Maximum linear speed (mm/s)
-        a_max: Maximum linear acceleration (mm/s^2)
-
-    Returns:
-        Estimated time in seconds
-    """
-    d_switch = (v_max * v_max) / a_max
-
-    if d_mm <= d_switch:
-        return 2.0 * math.sqrt(d_mm / a_max)
-    else:
-        return (d_mm / v_max) + (v_max / a_max)
-
-
 def safe_target(tx: float, ty: float, rx: float, ry: float) -> tuple[float, float]:
     if not is_in_field((tx, ty)):
         return rx, ry
     if point_in_defense_area((tx, ty)):
         return rx, ry
     return tx, ty
-
-
-def is_safe_from_robots(tx: float, ty: float, robots: list, margin: float = 200.0) -> bool:
-    for r in robots:
-        if distance((tx, ty), r[:2]) < COLLISION_DISTANCE + margin:
-            return False
-    return True
 
 
 def avoid_collision(rx: float, ry: float, tx: float, ty: float, y0, y1) -> tuple[float, float]:

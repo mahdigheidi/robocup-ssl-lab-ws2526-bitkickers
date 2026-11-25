@@ -7,7 +7,7 @@ from team_control.behavior import AnsiColors, enable_logging
 from team_control.behavior.context import WorldState
 from team_control.behavior.robot import Robot
 from team_control.behavior.roles import Passer
-from team_control.motion.obstacles.helpers import check_possession
+from team_control.motion.obstacles.helpers import check_possession, distance
 from team_control.network.ssl_sockets import grSimSender
 from team_control.sim.ball_idle_spawner import BallIdleSpawner
 from team_control.sim.send_ball_grsim import send_ball_to_grsim
@@ -38,11 +38,6 @@ def ball_moving_toward(robot_pos: np.ndarray, ball_pos, ball_velocity, ball_spee
     if dist < 1:
         return False
     return np.dot(ball_dir, to_robot / dist) > 0.3
-
-
-def distance(pos0: np.ndarray, pos1: np.ndarray) -> float:
-    """Calculate Euclidean distance between two 2D positions."""
-    return float(np.linalg.norm(pos0[:2] - pos1[:2]))
 
 
 def determine_ball_responsibility(

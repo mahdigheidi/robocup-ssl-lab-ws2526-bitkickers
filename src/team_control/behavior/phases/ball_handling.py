@@ -6,7 +6,7 @@ from typing import Any, Optional
 import numpy as np
 
 from team_control.behavior.context import POSSESSION_THRESHOLD, EntityState, RobotContext
-from team_control.motion.obstacles.helpers import avoid_collision_robust
+from team_control.motion.obstacles.helpers import avoid_collision_robust, distance
 from team_control.network.robot_command import RobotCommand
 from team_control.network.ssl_sockets import grSimSender
 from team_control.sim.ball_idle_spawner import BallIdleSpawner
@@ -59,11 +59,6 @@ SHOOTING_KICK_POWER = 10  # Maximum power
 # striker constraints
 STRIKER_X_LIMIT = 1600.0
 STRIKER_MARGIN = 120.0
-
-
-def distance(pos0: np.ndarray, pos1: np.ndarray) -> float:
-    """Calculate Euclidean distance between two 2D positions."""
-    return float(np.linalg.norm(pos0[:2] - pos1[:2]))
 
 
 # =============================================================================
