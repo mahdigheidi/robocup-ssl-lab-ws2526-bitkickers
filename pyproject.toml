@@ -22,12 +22,3 @@ where = ["src"]
 
 [tools.setuptools.dynamic]
 version = {attr = "team_control.__version__"}
-
-[project.optional-dependencies]
-pathplanning = [
-    "scikit-learn",
-    "networkx",
-    ]
-trajectory = [
-    "scikit-learn",
-]
