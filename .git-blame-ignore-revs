@@ -1,0 +1,5 @@
+# Bulk formatting commits, skipped by git blame.
+# Enable once per clone: git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# ruff format (line length 100)
+b37b392db862e7445f0a72b59696247ff730ae22
