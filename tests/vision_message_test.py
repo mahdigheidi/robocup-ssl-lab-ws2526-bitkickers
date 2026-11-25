@@ -1,4 +1,4 @@
-from TeamControl.network.ssl_sockets import Vision
+from team_control.network.ssl_sockets import Vision
 
 def test_vision_initialization():
     vision = Vision()

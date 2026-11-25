@@ -1,7 +1,7 @@
 # Use pip to install the package with "pip install -e ." in the terminal to install it into your Python environment.
 # Run this script to see the demo the logging and try it out for yourself.
 
-from TeamControl.utils.Logger import LogSaver
+from team_control.utils.logger import LogSaver
 
 logs = LogSaver()
 
