@@ -20,7 +20,7 @@ from team_control.sim.ball_spawner import BallSpawner
 from team_control.sim.send_ball_grsim import send_ball_to_grsim
 from team_control.world.model import WorldModel
 
-SIM_IP = "192.168.178.2"
+SIM_IP = "127.0.0.1"
 CMD_LISTEN_PORT = 20011
 DIVISION = "B"
 
@@ -94,7 +94,7 @@ def team_control_process(wm: WorldModel):
     spawner = BallSpawner(division=DIVISION)
 
     # Create yellow robots
-    robots = {}
+    robots: dict[int, Robot] = {}
     if run_yellow:
         goalie = Robot(robot_id=0, is_yellow=True, role=Goalkeeper())
         defender = Robot(robot_id=1, is_yellow=True, role=Defender(home=(2200.0, -1000.0)))
@@ -124,7 +124,7 @@ def team_control_process(wm: WorldModel):
         defender.switch_phase(Defender.Phase.CHASING)
         midfielder.switch_phase(Midfielder.Phase.CHASING)
 
-    blue_robots = {}
+    blue_robots: dict[int, Robot] = {}
     if run_blue:
         # Create blue robots
         try:
