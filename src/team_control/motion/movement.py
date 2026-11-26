@@ -1,0 +1,289 @@
+import math
+import time
+
+import numpy as np
+
+from team_control.behavior import context
+from team_control.motion.obstacle_pre_processor import preprocess_best_path
+from team_control.motion.obstacles.helpers import ROBOT_RADIUS
+from team_control.world.transform_cords import world2robot
+
+
+class PDController:
+    """PD controller with trapezoidal velocity profile feed-forward."""
+
+    def __init__(self) -> None:
+        self.prev_error: float = 0.0
+        self.prev_derivative: float = 0.0
+        self.prev_time: float = time.time()
+
+    def compute(
+        self,
+        error: float,
+        max_output: float,
+        max_acceleration: float,
+        p_gain: float,
+        d_gain: float,
+        stop_threshold: float,
+        d_low_pass: float = 0.5,
+    ) -> float:
+        """
+        Compute control output using PD control with trapezoidal velocity profile.
+
+        Args:
+            error: Current error (distance or angle)
+            max_output: Maximum output velocity
+            max_acceleration: Maximum acceleration for trapezoidal profile
+            p_gain: Proportional gain
+            d_gain: Derivative gain
+            stop_threshold: Error threshold below which output is zero
+            d_low_pass: Low-pass filter coefficient for derivative (0-1)
+
+        Returns:
+            Control output (velocity)
+        """
+        delta_time = time.time() - self.prev_time
+        self.prev_time = time.time()
+
+        # Prevent division by zero
+        if delta_time < 1e-6:
+            delta_time = 1e-6
+
+        # Trapezoidal velocity profile feed-forward
+        decel_distance = (max_output * max_output) / (2 * max_acceleration)
+
+        if error < 2 * decel_distance:
+            v_peak = math.sqrt(2 * max_acceleration * error)
+            v_ff = min(v_peak, max_output)
+        else:
+            v_ff = max_output
+
+        # Derivative with low-pass filter
+        derivative = (error - self.prev_error) / delta_time
+        derivative = d_low_pass * derivative + (1 - d_low_pass) * self.prev_derivative
+
+        # PD control + feed forward
+        output = p_gain * error + d_gain * derivative + v_ff
+
+        # Clamp to max output
+        output = max(min(output, max_output), -max_output)
+
+        # Stop if close enough
+        if error < stop_threshold:
+            output = 0.0
+
+        self.prev_error = error
+        self.prev_derivative = derivative
+
+        return output
+
+
+class RobotMovement:
+    """Provides basic movement control utilities for robots."""
+
+    def __init__(self) -> None:
+        self.position_controller = PDController()
+        self.rotation_controller = PDController()
+        # --- path planning cache ---
+        self._path: list[tuple[float, float]] | None = None
+        self._path_goal: tuple[float, float] | None = None
+        self._path_index: int = 0
+        self._last_plan_time: float = 0.0
+        self.allow_defense_area = False
+
+    def set_allow_defense(self, allow: bool):
+        self.allow_defense_area = allow
+
+    def go_to(
+        self,
+        robot_pos: tuple[float, float, float] | np.ndarray,
+        target: tuple[float, float] | np.ndarray,
+        kicker_to_target: bool = False,
+        max_speed: float = 5000,  # mm/s
+        max_acceleration: float = 1700,  # mm/s^2
+        kicker_offset: float = 102.0,  # mm
+        proportional_gain: float = 0.05,
+        differential_gain: float = 0.01,
+        differential_low_pass: float = 0.5,
+        stop_threshold: float = 1.0,  # mm
+        static_obstacles: list[tuple[float, float]] | None = None,
+        dynamic_obstacles: list[tuple[tuple[float, float], tuple[float, float]]] | None = None,
+    ) -> tuple[float, float]:
+        """
+        Calculate the velocity (vx, vy) for the robot to move towards a target position.
+        """
+        x, y, theta = robot_pos
+
+        # --- BOUNDARY ENFORCEMENT ---
+        # Ensure robot center stays inside field with enough room for its body
+        buffer = ROBOT_RADIUS + 15.0  # Increased buffer to 103.5mm
+        tx = float(np.clip(target[0], -4500.0 + buffer, 4500.0 - buffer))
+        ty = float(np.clip(target[1], -3000.0 + buffer, 3000.0 - buffer))
+        target_xy = (tx, ty)
+
+        if kicker_to_target:
+            # Apply kicker offset in the robot's facing direction
+            x += kicker_offset * math.cos(theta)
+            y += kicker_offset * math.sin(theta)
+
+        # -------------------------------
+        # OBSTACLE-AWARE TARGET SELECTION
+        # -------------------------------
+        static_obs = static_obstacles or []
+        dynamic_obs = dynamic_obstacles or []
+
+        # Replan path if needed
+        if (
+            target_xy != self._path_goal or time.time() - self._last_plan_time > 0.5
+        ):  # More frequent replanning
+            try:
+                self._path = preprocess_best_path(
+                    start=(x, y),
+                    goal=target_xy,
+                    static_obstacles=static_obs,
+                    dynamic_obstacles=dynamic_obs,
+                    allow_defense=self.allow_defense_area,
+                    is_yellow=context.is_yellow,
+                )
+                self._path_goal = target_xy
+                self._path_index = 0
+                self._last_plan_time = time.time()
+            except Exception:
+                self._path = None
+
+        # Choose next waypoint
+        if self._path and self._path_index < len(self._path):
+            waypoint = self._path[self._path_index]
+
+            # Advance waypoint if close
+            if math.hypot(waypoint[0] - x, waypoint[1] - y) < 150:
+                self._path_index += 1
+                if self._path_index < len(self._path):
+                    waypoint = self._path[self._path_index]
+                else:
+                    waypoint = target_xy
+        else:
+            waypoint = target_xy
+
+        # -------------------------------
+        # PD CONTROL (UNCHANGED)
+        # -------------------------------
+        dx, dy = world2robot((x, y, theta), waypoint)
+
+        position_error = math.hypot(dx, dy)
+
+        desired_v = self.position_controller.compute(
+            error=position_error,
+            max_output=max_speed,
+            max_acceleration=max_acceleration,
+            p_gain=proportional_gain,
+            d_gain=differential_gain,
+            d_low_pass=differential_low_pass,
+            stop_threshold=stop_threshold,
+        )
+
+        if position_error > 1e-6:
+            vx_cmd = (dx / position_error) * desired_v
+            vy_cmd = (dy / position_error) * desired_v
+        else:
+            vx_cmd = 0.0
+            vy_cmd = 0.0
+
+        return vx_cmd / 1000, vy_cmd / 1000
+
+        """# Calculate position error
+        position_error = math.hypot(dx, dy)
+
+        # Use position controller to get desired speed
+        desired_v = self.position_controller.compute(
+            error=position_error,
+            max_output=max_speed,
+            max_acceleration=max_acceleration,
+            p_gain=proportional_gain,
+            d_gain=differential_gain,
+            d_low_pass=differential_low_pass,
+            stop_threshold=stop_threshold,
+        )
+
+        # Convert to x,y components (avoid division by zero)
+        if position_error > 1e-6:
+            vx_cmd = (dx / position_error) * desired_v
+            vy_cmd = (dy / position_error) * desired_v
+        else:
+            vx_cmd = 0.0
+            vy_cmd = 0.0
+
+        # Convert linear velocities from mm/s to m/s
+        return vx_cmd / 1000, vy_cmd / 1000"""
+
+    def face_towards(
+        self,
+        robot_pos: tuple[float, float, float] | np.ndarray,
+        target: tuple[float, float] | np.ndarray,
+        max_angular_speed: float = 4.0,  # radians/s
+        max_angular_acceleration: float = 5.0,  # rad/s^2
+        angular_proportional_gain: float = 0.5,
+        angular_differential_gain: float = 0.15,
+        angular_differential_low_pass: float = 0.3,
+        stop_threshold: float = 0.05,  # radians
+    ) -> float:
+        """
+        Calculate the angular velocity (w) for the robot to face towards a target point.
+
+        Args:
+            robot_pos (tuple[float, float, float]): Robot's current position (x, y, theta) in world coordinates.
+            target (tuple[float, float]): Target point to face towards in world coordinates.
+            max_angular_speed: Maximum angular speed in rad/s
+            max_angular_acceleration: Maximum angular acceleration in rad/s^2
+            angular_proportional_gain: P gain for rotation control
+            angular_differential_gain: D gain for rotation control
+            angular_differential_low_pass: Low-pass filter for rotation derivative
+            stop_threshold: Angle threshold below which robot stops rotating (radians)
+
+        Returns:
+            float: Angular velocity (w) in rad/s.
+        """
+        x, y, theta = robot_pos
+
+        # Calculate target angle
+        target_angle = math.atan2(target[1] - y, target[0] - x)
+        theta_error = (target_angle - theta + math.pi) % (2 * math.pi) - math.pi
+
+        # Use rotation controller to get desired angular speed
+        w_cmd = self.rotation_controller.compute(
+            error=abs(theta_error),
+            max_output=max_angular_speed,
+            max_acceleration=max_angular_acceleration,
+            p_gain=angular_proportional_gain,
+            d_gain=angular_differential_gain,
+            d_low_pass=angular_differential_low_pass,
+            stop_threshold=stop_threshold,
+        )
+
+        # Apply correct sign to angular velocity
+        w_cmd = w_cmd if theta_error > 0 else -w_cmd
+
+        return w_cmd
+
+
+def time_to_reach(d_mm: float, v_max: float = 3000.0, a_max: float = 1700.0) -> float:
+    """
+    Analytic time estimate for the robot to reach a target distance.
+
+    Uses a trapezoidal (or triangular) velocity profile consistent
+    with the movement controller.
+
+    Args:
+        d_mm: Distance to target in millimeters
+        v_max: Maximum linear speed (mm/s)
+        a_max: Maximum linear acceleration (mm/s^2)
+
+    Returns:
+        Estimated time in seconds
+    """
+    d_switch = (v_max * v_max) / a_max
+
+    if d_mm <= d_switch:
+        return 2.0 * math.sqrt(d_mm / a_max)
+    else:
+        return (d_mm / v_max) + (v_max / a_max)

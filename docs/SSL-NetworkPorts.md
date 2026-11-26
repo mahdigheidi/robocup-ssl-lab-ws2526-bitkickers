@@ -2,9 +2,9 @@
 
 This files covers the default ports for major SSL communications
 
-For Detail Protobuf files please see [proto2](/src/TeamControl/SSL/proto2/)
+For Detail Protobuf files please see [proto2](/src/team_control/network/proto2/)
 
-[SSL Folder](/src/TeamControl/SSL/) includes the different SSL software unique classes and sockets
+[vision](/src/team_control/vision/) and [game_controller](/src/team_control/game_controller/) include the different SSL software unique classes and sockets
 
 
 --- 
